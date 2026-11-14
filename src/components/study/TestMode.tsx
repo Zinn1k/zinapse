@@ -45,37 +45,40 @@ export function TestMode({ deck, cards, onExit }: TestModeProps) {
       // Alternate question types
       const typeIndex = idx % 3;
 
+      const cardTerm = c.term || c.front || "";
+      const cardDef = c.definition || c.back || "";
+
       if (typeIndex === 0 && cards.length >= 4) {
         // Multiple choice
         const distractors = cards
           .filter((other) => other.id !== c.id)
           .sort(() => Math.random() - 0.5)
           .slice(0, 3)
-          .map((other) => other.back);
-        const options = [...distractors, c.back].sort(() => Math.random() - 0.5);
+          .map((other) => other.definition || other.back || "");
+        const options = [...distractors, cardDef].sort(() => Math.random() - 0.5);
 
         testQuestions.push({
           id: `q_${c.id}_choice`,
           card: c,
           type: "choice",
-          prompt: c.front,
-          correctAnswer: c.back,
+          prompt: cardTerm,
+          correctAnswer: cardDef,
           options,
         });
       } else if (typeIndex === 1 && cards.length >= 2) {
         // True / False
         const isTrue = Math.random() > 0.5;
-        let displayedAnswer = c.back;
+        let displayedAnswer = cardDef;
         if (!isTrue) {
           const falseCard = cards.find((other) => other.id !== c.id);
-          if (falseCard) displayedAnswer = falseCard.back;
+          if (falseCard) displayedAnswer = falseCard.definition || falseCard.back || "";
         }
 
         testQuestions.push({
           id: `q_${c.id}_tf`,
           card: c,
           type: "true_false",
-          prompt: `${c.front}\n\n*Statement:* "${displayedAnswer}"`,
+          prompt: `${cardTerm}\n\n*Statement:* "${displayedAnswer}"`,
           correctAnswer: isTrue ? "True" : "False",
           options: ["True", "False"],
           isTrue,
@@ -86,8 +89,8 @@ export function TestMode({ deck, cards, onExit }: TestModeProps) {
           id: `q_${c.id}_written`,
           card: c,
           type: "written",
-          prompt: c.front,
-          correctAnswer: c.back,
+          prompt: cardTerm,
+          correctAnswer: cardDef,
         });
       }
     });
@@ -263,9 +266,9 @@ export function TestMode({ deck, cards, onExit }: TestModeProps) {
                 <MarkdownMath content={q.prompt} />
               </div>
 
-              {q.card.frontImage && (
+              {(q.card.imageData || q.card.frontImage) && (
                 <img
-                  src={q.card.frontImage}
+                  src={q.card.imageData || q.card.frontImage}
                   alt="Question illustration"
                   className="max-h-40 rounded-xl mb-4 object-contain shadow-sm"
                 />

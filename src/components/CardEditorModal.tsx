@@ -46,10 +46,10 @@ export function CardEditorModal({
 
   useEffect(() => {
     if (cardToEdit) {
-      setFront(cardToEdit.front);
-      setBack(cardToEdit.back);
+      setFront(cardToEdit.term || cardToEdit.front || "");
+      setBack(cardToEdit.definition || cardToEdit.back || "");
       setHint(cardToEdit.hint || "");
-      setFrontImage(cardToEdit.frontImage);
+      setFrontImage(cardToEdit.imageData || cardToEdit.frontImage);
       setBackImage(cardToEdit.backImage);
       setFrontLang(cardToEdit.frontLang || "en-US");
       setBackLang(cardToEdit.backLang || "en-US");
@@ -110,9 +110,12 @@ export function CardEditorModal({
 
     if (cardToEdit) {
       await db.cards.update(cardId, {
+        term: front.trim(),
+        definition: back.trim(),
         front: front.trim(),
         back: back.trim(),
         hint: hint.trim() || undefined,
+        imageData: frontImage,
         frontImage,
         backImage,
         frontLang,
@@ -130,9 +133,12 @@ export function CardEditorModal({
       const newCard: Card = {
         id: cardId,
         deckId,
+        term: front.trim(),
+        definition: back.trim(),
         front: front.trim(),
         back: back.trim(),
         hint: hint.trim() || undefined,
+        imageData: frontImage,
         frontImage,
         backImage,
         frontLang,

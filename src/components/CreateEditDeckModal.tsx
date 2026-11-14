@@ -7,7 +7,7 @@ import {
   Upload,
 } from "lucide-react";
 import { db, type Deck, type Card, GUEST_USER_ID } from "@/lib/db";
-import { generateId } from "@/lib/utils";
+import { generateId, generateShareCode } from "@/lib/utils";
 
 interface CreateEditDeckModalProps {
   isOpen: boolean;
@@ -91,11 +91,13 @@ export function CreateEditDeckModal({
     } else {
       const newDeck: Deck = {
         id: deckId,
+        ownerId: userId || GUEST_USER_ID,
         userId: userId || GUEST_USER_ID,
         title: title.trim(),
         description: description.trim(),
         tags,
         isPublic: true,
+        shareCode: generateShareCode(),
         createdAt: now,
         updatedAt: now,
       };
@@ -111,11 +113,15 @@ export function CreateEditDeckModal({
       for (const line of lines) {
         const parts = line.split(termSeparator);
         if (parts.length >= 2 && parts[0].trim() && parts[1].trim()) {
+          const term = parts[0].trim();
+          const definition = parts.slice(1).join(termSeparator).trim();
           newCards.push({
             id: generateId(),
             deckId,
-            front: parts[0].trim(),
-            back: parts.slice(1).join(termSeparator).trim(),
+            term,
+            definition,
+            front: term,
+            back: definition,
             order: order++,
             createdAt: now,
             updatedAt: now,

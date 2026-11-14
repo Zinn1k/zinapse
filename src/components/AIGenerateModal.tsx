@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import { generateFlashcardsWithAI, type GeneratedCard } from "@/lib/ai";
 import { db, type Deck, type Card, GUEST_USER_ID } from "@/lib/db";
-import { generateId } from "@/lib/utils";
+import { generateId, generateShareCode } from "@/lib/utils";
 import { MarkdownMath } from "./MarkdownMath";
 
 interface AIGenerateModalProps {
@@ -98,11 +98,13 @@ export function AIGenerateModal({
       finalDeckId = generateId();
       const newDeck: Deck = {
         id: finalDeckId,
+        ownerId: userId || GUEST_USER_ID,
         userId: userId || GUEST_USER_ID,
         title: deckTitle.trim() || "AI Generated Deck",
         description: `Generated with Gemini AI (${difficulty} level)`,
         tags: ["AI", "Gemini"],
         isPublic: true,
+        shareCode: generateShareCode(),
         createdAt: now,
         updatedAt: now,
       };
@@ -112,6 +114,8 @@ export function AIGenerateModal({
     const cardsToInsert: Card[] = selectedCards.map((c, i) => ({
       id: generateId(),
       deckId: finalDeckId!,
+      term: c.front,
+      definition: c.back,
       front: c.front,
       back: c.back,
       hint: c.hint,

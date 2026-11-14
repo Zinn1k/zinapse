@@ -58,14 +58,14 @@ export function MatchMode({ deck, cards, onExit }: MatchModeProps) {
         id: `front_${c.id}`,
         cardId: c.id,
         side: "front",
-        text: c.front,
+        text: c.term || c.front || "",
         matched: false,
       });
       generatedTiles.push({
         id: `back_${c.id}`,
         cardId: c.id,
         side: "back",
-        text: c.back,
+        text: c.definition || c.back || "",
         matched: false,
       });
     });

@@ -59,8 +59,8 @@ export function LearnMode({ deck, cards, userId, onExit }: LearnModeProps) {
       const sorted = [...cards].sort((a, b) => {
         const sa = stateMap.get(a.id);
         const sb = stateMap.get(b.id);
-        const aDue = sa ? sa.due : 0;
-        const bDue = sb ? sb.due : 0;
+        const aDue = sa ? (sa.due instanceof Date ? sa.due.getTime() : sa.due) : 0;
+        const bDue = sb ? (sb.due instanceof Date ? sb.due.getTime() : sb.due) : 0;
         return aDue - bDue;
       });
 
@@ -90,10 +90,13 @@ export function LearnMode({ deck, cards, userId, onExit }: LearnModeProps) {
       // Pick 3 distractor answers from other cards
       const otherCards = cards.filter((c) => c.id !== nextCard.id);
       const shuffledOthers = [...otherCards].sort(() => Math.random() - 0.5);
-      const distractors = shuffledOthers.slice(0, 3).map((c) => c.back);
+      const distractors = shuffledOthers
+        .slice(0, 3)
+        .map((c) => c.definition || c.back || "");
 
-      const allChoices = [...distractors, nextCard.back].sort(() => Math.random() - 0.5);
-      const correctIdx = allChoices.indexOf(nextCard.back);
+      const correctAns = nextCard.definition || nextCard.back || "";
+      const allChoices = [...distractors, correctAns].sort(() => Math.random() - 0.5);
+      const correctIdx = allChoices.indexOf(correctAns);
 
       setCurrentQuestion({
         card: nextCard,
@@ -137,7 +140,10 @@ export function LearnMode({ deck, cards, userId, onExit }: LearnModeProps) {
     if (isAnswered || !currentQuestion || !writtenAnswer.trim()) return;
 
     const cleanInput = writtenAnswer.trim().toLowerCase().replace(/[.,!?'"`$]/g, "");
-    const cleanBack = currentQuestion.card.back.trim().toLowerCase().replace(/[.,!?'"`$]/g, "");
+    const cleanBack = (currentQuestion.card.definition || currentQuestion.card.back || "")
+      .trim()
+      .toLowerCase()
+      .replace(/[.,!?'"`$]/g, "");
 
     const correct = cleanInput === cleanBack || cleanBack.includes(cleanInput);
 
@@ -272,12 +278,12 @@ export function LearnMode({ deck, cards, userId, onExit }: LearnModeProps) {
         </div>
 
         <div className="text-lg sm:text-xl font-medium text-zinc-900 dark:text-white leading-relaxed">
-          <MarkdownMath content={currentQuestion.card.front} />
+          <MarkdownMath content={currentQuestion.card.term || currentQuestion.card.front || ""} />
         </div>
 
-        {currentQuestion.card.frontImage && (
+        {(currentQuestion.card.imageData || currentQuestion.card.frontImage) && (
           <img
-            src={currentQuestion.card.frontImage}
+            src={currentQuestion.card.imageData || currentQuestion.card.frontImage}
             alt="Question illustration"
             className="max-h-48 mx-auto rounded-xl object-contain shadow-sm mt-3"
           />
@@ -383,7 +389,7 @@ export function LearnMode({ deck, cards, userId, onExit }: LearnModeProps) {
             {!isCorrect && (
               <div className="text-xs text-zinc-700 dark:text-zinc-300">
                 <span className="font-semibold">Correct Answer: </span>
-                <MarkdownMath content={currentQuestion.card.back} />
+                <MarkdownMath content={currentQuestion.card.definition || currentQuestion.card.back || ""} />
               </div>
             )}
           </div>

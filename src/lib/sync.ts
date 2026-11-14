@@ -91,7 +91,7 @@ export async function syncDownFromCloud(userId: string): Promise<void> {
   try {
     // 1. Fetch user decks
     const decksSnap = await getDocs(
-      query(collection(dbFirestore, "decks"), where("userId", "==", userId))
+      query(collection(dbFirestore, "decks"), where("ownerId", "==", userId))
     );
     const cloudDecks: Deck[] = [];
     decksSnap.forEach((d) => cloudDecks.push(d.data() as Deck));

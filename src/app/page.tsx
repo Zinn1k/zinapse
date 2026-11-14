@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { useLiveQuery } from "dexie-react-hooks";
 import {
   Plus,
@@ -10,6 +11,7 @@ import {
   Clock,
 } from "lucide-react";
 import { db, seedSampleDataIfEmpty, GUEST_USER_ID } from "@/lib/db";
+import { generateId } from "@/lib/utils";
 import { AppHeader } from "@/components/AppHeader";
 import { DeckCard } from "@/components/DeckCard";
 import { DeckDetailView } from "@/components/DeckDetailView";
@@ -18,6 +20,7 @@ import { AIGenerateModal } from "@/components/AIGenerateModal";
 import { SettingsModal } from "@/components/SettingsModal";
 
 export default function Home() {
+  const router = useRouter();
   const [currentUserId, setCurrentUserId] = useState<string>(GUEST_USER_ID);
   const [selectedDeckId, setSelectedDeckId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -104,7 +107,7 @@ export default function Home() {
 
                 <div className="flex flex-wrap items-center gap-3 pt-2">
                   <button
-                    onClick={() => setIsCreateDeckOpen(true)}
+                    onClick={() => router.push(`/deck/${generateId()}/edit`)}
                     className="flex items-center space-x-2 px-4 py-2.5 rounded-xl bg-white text-indigo-700 font-bold text-xs sm:text-sm shadow-md hover:bg-indigo-50 transition active:scale-95"
                   >
                     <Plus className="w-4 h-4" />
@@ -192,7 +195,7 @@ export default function Home() {
                   </div>
                   <div className="flex justify-center space-x-3 pt-2">
                     <button
-                      onClick={() => setIsCreateDeckOpen(true)}
+                      onClick={() => router.push(`/deck/${generateId()}/edit`)}
                       className="px-4 py-2 rounded-xl bg-indigo-600 text-white text-xs font-semibold shadow-sm"
                     >
                       Create Deck

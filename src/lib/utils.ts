@@ -15,6 +15,15 @@ export function generateId(): string {
   );
 }
 
+export function generateShareCode(): string {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let result = "";
+  for (let i = 0; i < 6; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+}
+
 export function formatDate(timestamp: number | Date): string {
   const d = typeof timestamp === "number" ? new Date(timestamp) : timestamp;
   return new Intl.DateTimeFormat(undefined, {

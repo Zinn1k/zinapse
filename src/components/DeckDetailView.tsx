@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import Link from "next/link";
 import { useLiveQuery } from "dexie-react-hooks";
 import {
   ArrowLeft,
@@ -118,11 +119,10 @@ export function DeckDetailView({ deckId, userId, onBack }: DeckDetailViewProps) 
   // Filter cards
   const filteredCards = cardList.filter((c) => {
     const q = searchQuery.toLowerCase();
-    return (
-      c.front.toLowerCase().includes(q) ||
-      c.back.toLowerCase().includes(q) ||
-      (c.hint && c.hint.toLowerCase().includes(q))
-    );
+    const term = (c.term || c.front || "").toLowerCase();
+    const def = (c.definition || c.back || "").toLowerCase();
+    const hint = (c.hint || "").toLowerCase();
+    return term.includes(q) || def.includes(q) || hint.includes(q);
   });
 
   const handleDeleteCard = async (cardId: string) => {
@@ -178,13 +178,14 @@ export function DeckDetailView({ deckId, userId, onBack }: DeckDetailViewProps) 
             <Download className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">Export</span>
           </button>
-          <button
-            onClick={() => setIsEditDeckModalOpen(true)}
-            className="p-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition"
-            title="Edit Deck Info"
+          <Link
+            href={`/deck/${deck.id}/edit`}
+            className="flex items-center space-x-1 px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition"
+            title="Open Deck Editor"
           >
-            <Edit className="w-4 h-4" />
-          </button>
+            <Edit className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Edit Deck</span>
+          </Link>
           <button
             onClick={handleDeleteDeck}
             className="p-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition"
@@ -391,15 +392,15 @@ export function DeckDetailView({ deckId, userId, onBack }: DeckDetailViewProps) 
                   {/* Front */}
                   <div className="space-y-1">
                     <span className="text-[10px] uppercase font-bold tracking-wider text-indigo-500">
-                      Front
+                      Term
                     </span>
                     <div className="text-sm font-medium text-zinc-900 dark:text-white">
-                      <MarkdownMath content={card.front} />
+                      <MarkdownMath content={card.term || card.front || ""} />
                     </div>
-                    {card.frontImage && (
+                    {(card.imageData || card.frontImage) && (
                       <img
-                        src={card.frontImage}
-                        alt="Front"
+                        src={card.imageData || card.frontImage}
+                        alt="Illustration"
                         className="h-20 w-auto rounded-lg object-contain mt-2 border border-zinc-100 dark:border-zinc-800"
                       />
                     )}
@@ -408,10 +409,10 @@ export function DeckDetailView({ deckId, userId, onBack }: DeckDetailViewProps) 
                   {/* Back */}
                   <div className="space-y-1 md:border-l md:border-zinc-100 md:dark:border-zinc-800 md:pl-4">
                     <span className="text-[10px] uppercase font-bold tracking-wider text-emerald-500">
-                      Back
+                      Definition
                     </span>
                     <div className="text-sm text-zinc-700 dark:text-zinc-300">
-                      <MarkdownMath content={card.back} />
+                      <MarkdownMath content={card.definition || card.back || ""} />
                     </div>
                     {card.backImage && (
                       <img
@@ -431,7 +432,7 @@ export function DeckDetailView({ deckId, userId, onBack }: DeckDetailViewProps) 
                 {/* Card Row Actions */}
                 <div className="flex items-center space-x-1 shrink-0 pt-1 sm:pt-0 self-end sm:self-start">
                   <button
-                    onClick={() => speakText(card.front, { lang: card.frontLang })}
+                    onClick={() => speakText(card.term || card.front || "", { lang: card.frontLang })}
                     className="p-1.5 rounded-lg text-zinc-400 hover:text-indigo-500 transition"
                     title="Speak Front"
                   >

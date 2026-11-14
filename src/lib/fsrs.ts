@@ -163,7 +163,17 @@ export async function rateCardFSRS(
   // 1. Save directly to Dexie for 0ms UI latency
   await db.fsrs_states.put(updatedRecord);
 
-  // 2. Queue for background cloud sync if enabled
+  // 2. Add to review_logs table
+  await db.review_logs.add({
+    id: generateId(),
+    cardId,
+    userId,
+    rating,
+    elapsedDays: outcome.card.elapsed_days,
+    reviewedAt: now.getTime(),
+  });
+
+  // 3. Queue for background cloud sync if enabled
   await db.sync_queue.add({
     id: generateId(),
     collection: "fsrs_states",
@@ -200,7 +210,8 @@ export async function calculateDeckFSRSStats(deckId: string, userId: string) {
     } else if (s.state === State.Learning || s.state === State.Relearning) {
       learningCount++;
     } else if (s.state === State.Review) {
-      if (s.due <= now) {
+      const dueTime = s.due instanceof Date ? s.due.getTime() : s.due;
+      if (dueTime <= now) {
         dueReviewCount++;
       } else if (s.stability >= 21) {
         masteredCount++;

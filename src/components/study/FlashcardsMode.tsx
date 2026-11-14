@@ -96,9 +96,9 @@ export function FlashcardsMode({
     e.stopPropagation();
     if (!currentCard) return;
     if (isFlipped) {
-      speakText(currentCard.back, { lang: currentCard.backLang });
+      speakText(currentCard.definition || currentCard.back || "", { lang: currentCard.backLang });
     } else {
-      speakText(currentCard.front, { lang: currentCard.frontLang });
+      speakText(currentCard.term || currentCard.front || "", { lang: currentCard.frontLang });
     }
   };
 
@@ -271,13 +271,13 @@ export function FlashcardsMode({
 
             <div className="my-auto py-4 text-center">
               <div className="text-xl sm:text-2xl font-medium text-zinc-900 dark:text-white leading-relaxed">
-                <MarkdownMath content={currentCard.front} />
+                <MarkdownMath content={currentCard.term || currentCard.front || ""} />
               </div>
 
-              {currentCard.frontImage && (
+              {(currentCard.imageData || currentCard.frontImage) && (
                 <img
-                  src={currentCard.frontImage}
-                  alt="Front illustration"
+                  src={currentCard.imageData || currentCard.frontImage}
+                  alt="Illustration"
                   className="mt-6 max-h-56 mx-auto rounded-xl object-contain shadow-sm"
                 />
               )}
@@ -315,7 +315,7 @@ export function FlashcardsMode({
 
             <div className="my-auto py-4 text-center">
               <div className="text-lg sm:text-xl text-zinc-800 dark:text-zinc-100 leading-relaxed">
-                <MarkdownMath content={currentCard.back} />
+                <MarkdownMath content={currentCard.definition || currentCard.back || ""} />
               </div>
 
               {currentCard.backImage && (

@@ -6,7 +6,9 @@ import {
   Layers,
   Clock,
   Trash2,
+  Edit,
 } from "lucide-react";
+import Link from "next/link";
 import { db, type Deck, deleteDeckCascade } from "@/lib/db";
 import { calculateDeckFSRSStats } from "@/lib/fsrs";
 
@@ -52,13 +54,23 @@ export function DeckCard({ deck, userId, onSelect }: DeckCardProps) {
             ))}
           </div>
 
-          <button
-            onClick={handleDelete}
-            className="text-zinc-400 hover:text-red-500 p-1 rounded-lg opacity-0 group-hover:opacity-100 transition"
-            title="Delete Deck"
-          >
-            <Trash2 className="w-4 h-4" />
-          </button>
+          <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition">
+            <Link
+              href={`/deck/${deck.id}/edit`}
+              onClick={(e) => e.stopPropagation()}
+              className="text-zinc-400 hover:text-indigo-500 p-1 rounded-lg"
+              title="Edit Deck"
+            >
+              <Edit className="w-4 h-4" />
+            </Link>
+            <button
+              onClick={handleDelete}
+              className="text-zinc-400 hover:text-red-500 p-1 rounded-lg"
+              title="Delete Deck"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
         <div>
