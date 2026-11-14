@@ -215,7 +215,7 @@ export default function Home() {
                       key={deck.id}
                       deck={deck}
                       userId={currentUserId}
-                      onSelect={(id) => setSelectedDeckId(id)}
+                      onSelect={(id) => router.push(`/deck/${id}`)}
                     />
                   ))}
                 </div>
@@ -230,14 +230,14 @@ export default function Home() {
         isOpen={isCreateDeckOpen}
         onClose={() => setIsCreateDeckOpen(false)}
         userId={currentUserId}
-        onSaved={(id) => setSelectedDeckId(id)}
+        onSaved={(id) => router.push(`/deck/${id}`)}
       />
 
       <AIGenerateModal
         isOpen={isAIGenerateOpen}
         onClose={() => setIsAIGenerateOpen(false)}
         userId={currentUserId}
-        onDeckCreated={(id) => setSelectedDeckId(id)}
+        onDeckCreated={(id) => router.push(`/deck/${id}`)}
       />
 
       <SettingsModal

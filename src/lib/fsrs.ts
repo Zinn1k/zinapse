@@ -7,7 +7,7 @@ import {
   type Card as FSRSCard,
   type RecordLogItem,
 } from "ts-fsrs";
-import { db, type FSRSStateRecord } from "./db";
+import { db, type Card, type FSRSStateRecord } from "./db";
 import { generateId } from "./utils";
 
 export { Rating, State };
@@ -47,7 +47,7 @@ export function fsrsCardToRecord(
   userId: string
 ): FSRSStateRecord {
   return {
-    id: `${cardId}_${userId}`,
+    id: `${userId}_${cardId}`,
     cardId,
     deckId,
     userId,
@@ -66,23 +66,34 @@ export function fsrsCardToRecord(
 }
 
 /**
- * Formats difference between now and due date into user-friendly text like "10m", "1d", "4d"
+ * Formats difference between now and due date into localized text like "10 мин", "4 дня", "1 мес"
  */
-export function formatFSRSInterval(dueDate: Date, nowDate: Date = new Date()): string {
+export function formatFSRSInterval(
+  dueDate: Date,
+  nowDate: Date = new Date(),
+  lang: "ru" | "en" = "ru"
+): string {
   const diffMs = dueDate.getTime() - nowDate.getTime();
-  if (diffMs <= 0) return "< 1m";
+  if (diffMs <= 0) return lang === "ru" ? "< 1 мин" : "< 1m";
 
   const diffMinutes = Math.round(diffMs / (60 * 1000));
-  if (diffMinutes < 60) return `${Math.max(1, diffMinutes)}m`;
+  if (diffMinutes < 60) {
+    const m = Math.max(1, diffMinutes);
+    return lang === "ru" ? `${m} мин` : `${m}m`;
+  }
 
   const diffHours = Math.round(diffMs / (60 * 60 * 1000));
-  if (diffHours < 24) return `${diffHours}h`;
+  if (diffHours < 24) {
+    return lang === "ru" ? `${diffHours} ч` : `${diffHours}h`;
+  }
 
   const diffDays = Math.round(diffMs / (24 * 60 * 60 * 1000));
-  if (diffDays < 30) return `${diffDays}d`;
+  if (diffDays < 30) {
+    return lang === "ru" ? `${diffDays} дн` : `${diffDays}d`;
+  }
 
-  const diffMonths = (diffDays / 30).toFixed(1);
-  return `${diffMonths}mo`;
+  const diffMonths = Math.round(diffDays / 30);
+  return lang === "ru" ? `${diffMonths} мес` : `${diffMonths}mo`;
 }
 
 /**
@@ -93,7 +104,7 @@ export async function getOrCreateFSRSState(
   deckId: string,
   userId: string
 ): Promise<FSRSStateRecord> {
-  const id = `${cardId}_${userId}`;
+  const id = `${userId}_${cardId}`;
   const existing = await db.fsrs_states.get(id);
   if (existing) return existing;
 
@@ -105,13 +116,14 @@ export async function getOrCreateFSRSState(
 }
 
 /**
- * Returns projected intervals for each rating (Again, Hard, Good, Easy)
+ * Returns projected intervals for each rating (Again, Hard, Good, Easy) in Russian / English
  */
 export async function getFSRSIntervalPreviews(
   cardId: string,
   deckId: string,
   userId: string,
-  requestRetention: number = 0.9
+  requestRetention: number = 0.9,
+  lang: "ru" | "en" = "ru"
 ): Promise<IntervalPreview[]> {
   const record = await getOrCreateFSRSState(cardId, deckId, userId);
   const fsrsCard = recordToFSRSCard(record);
@@ -121,16 +133,16 @@ export async function getFSRSIntervalPreviews(
   const results = f.repeat(fsrsCard, now);
 
   const ratingsOrder: { rating: Rating; label: string }[] = [
-    { rating: Rating.Again, label: "Again" },
-    { rating: Rating.Hard, label: "Hard" },
-    { rating: Rating.Good, label: "Good" },
-    { rating: Rating.Easy, label: "Easy" },
+    { rating: Rating.Again, label: lang === "ru" ? "Снова" : "Again" },
+    { rating: Rating.Hard, label: lang === "ru" ? "Трудно" : "Hard" },
+    { rating: Rating.Good, label: lang === "ru" ? "Хорошо" : "Good" },
+    { rating: Rating.Easy, label: lang === "ru" ? "Легко" : "Easy" },
   ];
 
   return ratingsOrder.map(({ rating, label }) => {
     const outcome = results[rating as keyof typeof results] as RecordLogItem;
     const dueDate = outcome.card.due;
-    const intervalText = formatFSRSInterval(dueDate, now);
+    const intervalText = formatFSRSInterval(dueDate, now, lang);
     return {
       rating,
       label,
@@ -141,19 +153,79 @@ export async function getFSRSIntervalPreviews(
 }
 
 /**
- * Rates a card and schedules its next review date using FSRS
+ * Gets today's queue for a deck in FSRS mode:
+ * - Cards in Learning/Relearning due now
+ * - Cards in Review due now
+ * - New cards up to maxNewCards
+ */
+export async function getTodayFSRSQueue(
+  deckId: string,
+  userId: string,
+  maxNewCards: number = 20
+): Promise<Card[]> {
+  const allCards = await db.cards.where("deckId").equals(deckId).sortBy("order");
+  if (allCards.length === 0) return [];
+
+  const states = await db.fsrs_states.where("deckId").equals(deckId).toArray();
+  const userStates = states.filter((s) => s.userId === userId);
+  const stateMap = new Map(userStates.map((s) => [s.cardId, s]));
+
+  const now = Date.now();
+  const learningDue: Card[] = [];
+  const reviewDue: Card[] = [];
+  const newCards: Card[] = [];
+
+  for (const card of allCards) {
+    const s = stateMap.get(card.id);
+    if (!s || s.state === State.New) {
+      newCards.push(card);
+    } else if (s.state === State.Learning || s.state === State.Relearning) {
+      const dueTime = s.due instanceof Date ? s.due.getTime() : s.due;
+      if (dueTime <= now) {
+        learningDue.push(card);
+      }
+    } else if (s.state === State.Review) {
+      const dueTime = s.due instanceof Date ? s.due.getTime() : s.due;
+      if (dueTime <= now) {
+        reviewDue.push(card);
+      }
+    }
+  }
+
+  // Combine: learning due first, then review due, then capped new cards
+  const cappedNew = newCards.slice(0, maxNewCards);
+  return [...learningDue, ...reviewDue, ...cappedNew];
+}
+
+/**
+ * Rates a card and schedules its next review date using FSRS.
+ * If in cramMode, only adds to review_logs and leaves long-term FSRS state untouched.
  */
 export async function rateCardFSRS(
   cardId: string,
   deckId: string,
   userId: string,
   rating: Rating,
-  requestRetention: number = 0.9
+  options: { requestRetention?: number; cramMode?: boolean } = {}
 ): Promise<FSRSStateRecord> {
+  const { requestRetention = 0.9, cramMode = false } = options;
   const currentRecord = await getOrCreateFSRSState(cardId, deckId, userId);
-  const fsrsCard = recordToFSRSCard(currentRecord);
   const now = new Date();
 
+  // If Cram Mode: do not alter long-term FSRS schedule
+  if (cramMode) {
+    await db.review_logs.add({
+      id: generateId(),
+      cardId,
+      userId,
+      rating,
+      elapsedDays: 0,
+      reviewedAt: now.getTime(),
+    });
+    return currentRecord;
+  }
+
+  const fsrsCard = recordToFSRSCard(currentRecord);
   const f = fsrs(generatorParameters({ request_retention: requestRetention }));
   const results = f.repeat(fsrsCard, now);
   const outcome = results[rating as keyof typeof results] as RecordLogItem;
@@ -221,7 +293,7 @@ export async function calculateDeckFSRSStats(deckId: string, userId: string) {
 
   const total = cards.length;
   const totalReviewed = total - newCount;
-  const dueTotal = dueReviewCount + learningCount + (newCount > 0 ? Math.min(newCount, 15) : 0);
+  const dueTotal = dueReviewCount + learningCount + (newCount > 0 ? Math.min(newCount, 20) : 0);
 
   return {
     total,

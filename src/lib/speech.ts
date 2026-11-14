@@ -23,6 +23,13 @@ export function stopSpeech(): void {
   }
 }
 
+export function detectLanguageFromText(text: string): "ru-RU" | "en-US" {
+  if (/[а-яё]/i.test(text)) {
+    return "ru-RU";
+  }
+  return "en-US";
+}
+
 export function getAvailableVoices(): Promise<SpeechSynthesisVoice[]> {
   if (!isSpeechSupported()) return Promise.resolve([]);
 
@@ -69,10 +76,13 @@ export async function speakText(
   const utterance = new SpeechSynthesisUtterance(cleanText);
   activeUtterance = utterance;
 
-  const { lang, rate = 1.0, pitch = 1.0, voiceName } = options;
+  const detectedLang = detectLanguageFromText(cleanText);
+  const targetLang = options.lang || detectedLang;
+  const { rate = 1.0, pitch = 1.0, voiceName } = options;
 
   utterance.rate = rate;
   utterance.pitch = pitch;
+  utterance.lang = targetLang;
 
   const voices = await getAvailableVoices();
 
@@ -84,9 +94,10 @@ export async function speakText(
     }
   }
 
-  if (!utterance.voice && lang) {
-    utterance.lang = lang;
-    const langVoice = voices.find((v) => v.lang.toLowerCase().startsWith(lang.toLowerCase()));
+  if (!utterance.voice) {
+    const langVoice = voices.find((v) =>
+      v.lang.toLowerCase().replace("_", "-").startsWith(targetLang.toLowerCase().slice(0, 2))
+    );
     if (langVoice) {
       utterance.voice = langVoice;
     }
