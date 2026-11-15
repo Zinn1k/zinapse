@@ -80,10 +80,11 @@ Generate exactly ${count} flashcards.`;
 
     const cards = JSON.parse(text);
     return NextResponse.json({ cards });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("AI Generation error:", error);
+    const message = error instanceof Error ? error.message : "Failed to generate flashcards.";
     return NextResponse.json(
-      { error: error?.message || "Failed to generate flashcards." },
+      { error: message },
       { status: 500 }
     );
   }

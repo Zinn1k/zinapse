@@ -119,7 +119,7 @@ export default function FlashcardsPage({
   }, []);
 
   // FSRS Rating Handler
-  const handleRateFSRS = async (rating: Rating) => {
+  const handleRateFSRS = useCallback(async (rating: Rating) => {
     if (!currentCard) return;
 
     await rateCardFSRS(currentCard.id, deckId, userId, rating);
@@ -132,10 +132,10 @@ export default function FlashcardsPage({
       setIsCompleted(true);
       confetti({ particleCount: 90, spread: 75, origin: { y: 0.6 } });
     }
-  };
+  }, [currentCard, currentIndex, deckId, queue.length, userId]);
 
   // Cram Mode Rating Handlers
-  const handleCramResult = (knewIt: boolean) => {
+  const handleCramResult = useCallback((knewIt: boolean) => {
     if (!currentCard) return;
 
     // Log review without skewing long-term FSRS interval weights
@@ -163,7 +163,7 @@ export default function FlashcardsPage({
         confetti({ particleCount: 100, spread: 80, origin: { y: 0.6 } });
       }
     }
-  };
+  }, [currentCard, currentIndex, deckId, queue.length, userId]);
 
   // Audio Speech (TTS)
   const handleSpeak = (e: React.MouseEvent) => {
@@ -206,7 +206,7 @@ export default function FlashcardsPage({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [handleFlip, mode, currentCard, currentIndex, queue]);
+  }, [handleFlip, handleRateFSRS, handleCramResult, mode]);
 
   // Touch Swipe Handler (drag gesture)
   const handleDragEnd = (event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {

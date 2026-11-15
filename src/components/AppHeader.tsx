@@ -13,6 +13,8 @@ import {
   BookOpen,
   LogOut,
   LogIn,
+  WifiOff,
+  CheckCircle,
 } from "lucide-react";
 import {
   subscribeToAuthChanges,
@@ -20,7 +22,7 @@ import {
   signOutUser,
   isFirebaseConfigured,
 } from "@/lib/firebase";
-import { subscribeSyncState, processSyncQueue, type SyncState } from "@/lib/sync";
+import { subscribeSyncState, triggerFullSync, type SyncState } from "@/lib/sync";
 import { GUEST_USER_ID } from "@/lib/db";
 import type { User } from "firebase/auth";
 
@@ -34,12 +36,12 @@ interface AppHeaderProps {
 export function AppHeader({
   onOpenSettings,
   onOpenAIGenerate,
-  currentUserId,
   setCurrentUserId,
 }: AppHeaderProps) {
   const [user, setUser] = useState<User | null>(null);
   const [syncState, setSyncState] = useState<SyncState>({
     isSyncing: false,
+    isOnline: true,
     pendingCount: 0,
     lastSyncedAt: null,
     error: null,
@@ -61,6 +63,8 @@ export function AppHeader({
       setUser(firebaseUser);
       if (firebaseUser) {
         setCurrentUserId(firebaseUser.uid);
+        // Automatically sync cloud decks down and upload local queue
+        triggerFullSync(firebaseUser.uid).catch(() => {});
       } else {
         setCurrentUserId(GUEST_USER_ID);
       }
@@ -88,15 +92,16 @@ export function AppHeader({
 
   const handleManualSync = async () => {
     if (user) {
-      await processSyncQueue(user.uid);
+      await triggerFullSync(user.uid);
     }
   };
 
   const handleGoogleSignIn = async () => {
     try {
       await signInWithGoogle();
-    } catch (err: any) {
-      alert(err.message || "Failed to sign in with Google.");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Ошибка входа через Google";
+      alert(msg);
     }
   };
 
@@ -139,39 +144,51 @@ export function AppHeader({
             <span className="hidden sm:inline">AI Deck</span>
           </button>
 
-          {/* Sync indicator */}
-          {isFirebaseConfigured() ? (
+          {/* Sync status indicator */}
+          {!syncState.isOnline ? (
+            <div
+              className="flex items-center space-x-1 px-2.5 py-1.5 rounded-lg text-xs font-medium border border-amber-500/30 bg-amber-500/10 text-amber-500"
+              title="Нет подключения к сети. Все изменения сохраняются локально в Dexie.js"
+            >
+              <WifiOff className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Офлайн</span>
+            </div>
+          ) : !isFirebaseConfigured() || !user ? (
+            <div
+              className="flex items-center space-x-1 px-2.5 py-1.5 rounded-lg text-xs font-medium border border-dashed border-zinc-300 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400"
+              title="100% Local-First режим. Войдите через Google для облачной синхронизации"
+            >
+              <CloudOff className="w-3.5 h-3.5 text-zinc-400" />
+              <span className="hidden sm:inline">Локально</span>
+            </div>
+          ) : (
             <button
               onClick={handleManualSync}
               disabled={syncState.isSyncing}
-              className="flex items-center space-x-1 px-2.5 py-1.5 rounded-lg text-xs font-medium border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-900 text-zinc-600 dark:text-zinc-400 transition"
+              className="flex items-center space-x-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-900 text-zinc-700 dark:text-zinc-300 transition"
               title={
                 syncState.isSyncing
-                  ? "Syncing to Firestore..."
-                  : `Cloud Sync: ${syncState.pendingCount} pending`
+                  ? "Синхронизация с Firestore..."
+                  : syncState.pendingCount > 0
+                  ? `В очереди ${syncState.pendingCount} изменений. Нажмите для синхронизации`
+                  : "Все данные синхронизированы с облаком"
               }
             >
               {syncState.isSyncing ? (
                 <RefreshCw className="w-3.5 h-3.5 text-indigo-500 animate-spin" />
+              ) : syncState.pendingCount > 0 ? (
+                <Cloud className="w-3.5 h-3.5 text-amber-500" />
               ) : (
-                <Cloud className="w-3.5 h-3.5 text-emerald-500" />
+                <CheckCircle className="w-3.5 h-3.5 text-emerald-500" />
               )}
               <span className="hidden md:inline">
                 {syncState.isSyncing
-                  ? "Syncing..."
+                  ? "Синхронизация..."
                   : syncState.pendingCount > 0
-                  ? `${syncState.pendingCount} unmerged`
-                  : "Synced"}
+                  ? `В очереди: ${syncState.pendingCount}`
+                  : "Синхронизировано"}
               </span>
             </button>
-          ) : (
-            <div
-              className="flex items-center space-x-1 px-2 py-1 rounded text-xs text-zinc-500 dark:text-zinc-400 border border-dashed border-zinc-300 dark:border-zinc-800"
-              title="Running in 100% Local-First Offline Mode (Dexie IndexedDB)"
-            >
-              <CloudOff className="w-3.5 h-3.5 text-zinc-400" />
-              <span className="hidden lg:inline">Local-First</span>
-            </div>
           )}
 
           {/* User Auth */}

@@ -383,7 +383,7 @@ export function DeckDetailView({ deckId, userId, onBack }: DeckDetailViewProps) 
           </div>
         ) : (
           <div className="space-y-3">
-            {filteredCards.map((card, idx) => (
+            {filteredCards.map((card) => (
               <div
                 key={card.id}
                 className="p-4 sm:p-5 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm flex flex-col sm:flex-row items-start justify-between gap-4 group"

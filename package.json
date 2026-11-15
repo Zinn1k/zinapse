@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "vitest run"
   },
   "dependencies": {
     "@google/genai": "^3.3.0",
@@ -15,6 +16,7 @@
     "@radix-ui/react-slot": "^1.5.0",
     "@radix-ui/react-switch": "^1.4.1",
     "@radix-ui/react-tabs": "^1.2.1",
+    "@tailwindcss/postcss": "^4.3.5",
     "canvas-confetti": "^1.9.4",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -25,6 +27,7 @@
     "katex": "^0.19.1",
     "lucide-react": "^1.73.0",
     "next": "^15.5.29",
+    "postcss": "^8.5.33",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "react-markdown": "^10.1.0",
@@ -43,6 +46,8 @@
     "eslint": "^9",
     "eslint-config-next": "^15.5.29",
     "tailwindcss": "4.3.3",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vite": "^8.3.8",
+    "vitest": "^5.1.0"
   }
 }

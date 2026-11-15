@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import {
   RotateCw,
   ChevronLeft,
@@ -10,7 +10,6 @@ import {
   Volume2,
   Maximize2,
   Minimize2,
-  Sparkles,
   HelpCircle,
   CheckCircle,
   ArrowLeft,
@@ -79,11 +78,11 @@ export function FlashcardsMode({
     setIsFlipped((f) => !f);
   }, []);
 
-  const handleRate = async (rating: Rating) => {
+  const handleRate = useCallback(async (rating: Rating) => {
     if (!currentCard) return;
     await rateCardFSRS(currentCard.id, deck.id, userId, rating);
     handleNext();
-  };
+  }, [currentCard, deck.id, handleNext, userId]);
 
   const handleShuffle = () => {
     const shuffled = [...cards].sort(() => Math.random() - 0.5);
@@ -130,7 +129,7 @@ export function FlashcardsMode({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [handleFlip, handleNext, handlePrev]);
+  }, [handleFlip, handleNext, handlePrev, handleRate]);
 
   if (cards.length === 0) {
     return (

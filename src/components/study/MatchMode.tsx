@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Timer,
@@ -32,7 +32,6 @@ export function MatchMode({ deck, cards, onExit }: MatchModeProps) {
   const [selectedTileId, setSelectedTileId] = useState<string | null>(null);
   const [mismatchedPair, setMismatchedPair] = useState<[string, string] | null>(null);
   const [elapsedMs, setElapsedMs] = useState(0);
-  const [isPlaying, setIsPlaying] = useState(false);
   const [isCompleted, setIsCompleted] = useState(false);
   const [personalBest, setPersonalBest] = useState<number | null>(null);
 
@@ -47,7 +46,7 @@ export function MatchMode({ deck, cards, onExit }: MatchModeProps) {
     }
   }, [deck.id]);
 
-  const initGame = () => {
+  const initGame = useCallback(() => {
     // Select up to 6 cards for a 12-tile board
     const sampleSize = Math.min(6, cards.length);
     const selectedCards = [...cards].sort(() => Math.random() - 0.5).slice(0, sampleSize);
@@ -76,14 +75,13 @@ export function MatchMode({ deck, cards, onExit }: MatchModeProps) {
     setMismatchedPair(null);
     setIsCompleted(false);
     setElapsedMs(0);
-    setIsPlaying(true);
     startTimeRef.current = Date.now();
 
     if (timerRef.current) clearInterval(timerRef.current);
     timerRef.current = setInterval(() => {
       setElapsedMs(Date.now() - startTimeRef.current);
     }, 50);
-  };
+  }, [cards]);
 
   useEffect(() => {
     if (cards.length >= 2) {
@@ -92,7 +90,7 @@ export function MatchMode({ deck, cards, onExit }: MatchModeProps) {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [cards]);
+  }, [cards, initGame]);
 
   const handleTileClick = (tile: TileItem) => {
     if (tile.matched || mismatchedPair) return;
@@ -127,7 +125,6 @@ export function MatchMode({ deck, cards, onExit }: MatchModeProps) {
       if (remaining.length === 0) {
         if (timerRef.current) clearInterval(timerRef.current);
         const finalTime = Math.round((Date.now() - startTimeRef.current) / 100) / 10;
-        setIsPlaying(false);
         setIsCompleted(true);
         confetti({ particleCount: 120, spread: 90, origin: { y: 0.5 } });
 

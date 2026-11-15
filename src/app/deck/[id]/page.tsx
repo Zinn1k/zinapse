@@ -22,6 +22,8 @@ import {
 import { db, GUEST_USER_ID, deleteDeckCascade, type Card } from "@/lib/db";
 import { calculateDeckFSRSStats } from "@/lib/fsrs";
 import { speakText } from "@/lib/speech";
+import { dbFirestore, isFirebaseConfigured } from "@/lib/firebase";
+import { doc, setDoc } from "firebase/firestore";
 import { MarkdownMath } from "@/components/MarkdownMath";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -87,10 +89,27 @@ export default function DeckOverviewPage({
     }
   };
 
-  const copyShareCode = () => {
-    navigator.clipboard.writeText(deck.shareCode);
+  const copyShareCode = async () => {
+    const url = typeof window !== "undefined"
+      ? `${window.location.origin}/share/${deck.shareCode}`
+      : `/share/${deck.shareCode}`;
+    await navigator.clipboard.writeText(url);
     setCopiedShareCode(true);
-    setTimeout(() => setCopiedShareCode(false), 2000);
+    setTimeout(() => setCopiedShareCode(false), 2500);
+
+    // If cloud is connected, make sure this deck is marked isPublic and synced
+    if (isFirebaseConfigured() && dbFirestore) {
+      try {
+        const docRef = doc(dbFirestore, "decks", deck.id);
+        await setDoc(docRef, { ...deck, isPublic: true }, { merge: true });
+        const allCards = await db.cards.where("deckId").equals(deck.id).toArray();
+        for (const c of allCards) {
+          await setDoc(doc(dbFirestore, "cards", c.id), c, { merge: true });
+        }
+      } catch {
+        // Background push may fail if offline
+      }
+    }
   };
 
   const masteredPercentage = stats && stats.total > 0
@@ -111,6 +130,26 @@ export default function DeckOverviewPage({
           </Link>
 
           <div className="flex items-center space-x-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={copyShareCode}
+              className="text-xs"
+              title="Поделиться ссылкой на колоду"
+            >
+              {copiedShareCode ? (
+                <>
+                  <Check className="w-3.5 h-3.5 mr-1 text-emerald-500" />
+                  <span>Ссылка скопирована!</span>
+                </>
+              ) : (
+                <>
+                  <Share2 className="w-3.5 h-3.5 mr-1 text-indigo-500" />
+                  <span>Поделиться</span>
+                </>
+              )}
+            </Button>
+
             <Link href={`/deck/${deck.id}/edit`}>
               <Button variant="outline" size="sm" className="text-xs">
                 <Edit className="w-3.5 h-3.5 mr-1" />
@@ -203,9 +242,12 @@ export default function DeckOverviewPage({
             </Link>
 
             {/* Заучивание */}
-            <div className="p-5 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/60 opacity-90 flex flex-col justify-between">
+            <Link
+              href={`/deck/${deck.id}/learn`}
+              className="group p-5 rounded-2xl border-2 border-purple-500/40 bg-white dark:bg-zinc-900 hover:border-purple-600 dark:hover:border-purple-500 hover:shadow-xl transition-all duration-200 flex flex-col justify-between"
+            >
               <div className="space-y-3">
-                <div className="w-12 h-12 rounded-xl bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 flex items-center justify-center">
+                <div className="w-12 h-12 rounded-xl bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 flex items-center justify-center group-hover:scale-110 transition-transform">
                   <GraduationCap className="w-6 h-6" />
                 </div>
                 <div>
@@ -213,26 +255,24 @@ export default function DeckOverviewPage({
                     <span>Заучивание</span>
                   </div>
                   <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
-                    Тесты с выбором ответа и письменные упражнения.
+                    Адаптивные тесты 4 вариантов и письменный ввод с проверкой опечаток.
                   </p>
                 </div>
               </div>
 
-              <div className="pt-4 mt-2 border-t border-zinc-100 dark:border-zinc-800 text-xs text-zinc-400 flex items-center justify-between">
-                <Link
-                  href={`/deck/${deck.id}/flashcards`}
-                  className="hover:text-indigo-500 font-semibold"
-                >
-                  Запустить
-                </Link>
+              <div className="pt-4 mt-2 border-t border-zinc-100 dark:border-zinc-800 text-xs font-semibold text-purple-600 dark:text-purple-400 flex items-center justify-between">
+                <span>Начать заучивание</span>
                 <span>→</span>
               </div>
-            </div>
+            </Link>
 
             {/* Подбор */}
-            <div className="p-5 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/60 opacity-90 flex flex-col justify-between">
+            <Link
+              href={`/deck/${deck.id}/match`}
+              className="group p-5 rounded-2xl border-2 border-amber-500/40 bg-white dark:bg-zinc-900 hover:border-amber-600 dark:hover:border-amber-500 hover:shadow-xl transition-all duration-200 flex flex-col justify-between"
+            >
               <div className="space-y-3">
-                <div className="w-12 h-12 rounded-xl bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+                <div className="w-12 h-12 rounded-xl bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center group-hover:scale-110 transition-transform">
                   <Gamepad2 className="w-6 h-6" />
                 </div>
                 <div>
@@ -240,26 +280,24 @@ export default function DeckOverviewPage({
                     <span>Подбор</span>
                   </div>
                   <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
-                    Игра на скорость: сопоставление терминов и определений.
+                    Сетка 12 плиток на время с рекордами и штрафом за ошибки.
                   </p>
                 </div>
               </div>
 
-              <div className="pt-4 mt-2 border-t border-zinc-100 dark:border-zinc-800 text-xs text-zinc-400 flex items-center justify-between">
-                <Link
-                  href={`/deck/${deck.id}/flashcards`}
-                  className="hover:text-amber-500 font-semibold"
-                >
-                  Запустить
-                </Link>
+              <div className="pt-4 mt-2 border-t border-zinc-100 dark:border-zinc-800 text-xs font-semibold text-amber-600 dark:text-amber-400 flex items-center justify-between">
+                <span>Играть в подбор</span>
                 <span>→</span>
               </div>
-            </div>
+            </Link>
 
             {/* Тест */}
-            <div className="p-5 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/60 opacity-90 flex flex-col justify-between">
+            <Link
+              href={`/deck/${deck.id}/test`}
+              className="group p-5 rounded-2xl border-2 border-emerald-500/40 bg-white dark:bg-zinc-900 hover:border-emerald-600 dark:hover:border-emerald-500 hover:shadow-xl transition-all duration-200 flex flex-col justify-between"
+            >
               <div className="space-y-3">
-                <div className="w-12 h-12 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                <div className="w-12 h-12 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center group-hover:scale-110 transition-transform">
                   <FileCheck className="w-6 h-6" />
                 </div>
                 <div>
@@ -267,21 +305,16 @@ export default function DeckOverviewPage({
                     <span>Тест</span>
                   </div>
                   <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
-                    Итоговый экзамен с автоматической проверкой результатов.
+                    Экзаменационный билет: выбор, верно/неверно, ввод, сопоставление.
                   </p>
                 </div>
               </div>
 
-              <div className="pt-4 mt-2 border-t border-zinc-100 dark:border-zinc-800 text-xs text-zinc-400 flex items-center justify-between">
-                <Link
-                  href={`/deck/${deck.id}/flashcards`}
-                  className="hover:text-emerald-500 font-semibold"
-                >
-                  Запустить
-                </Link>
+              <div className="pt-4 mt-2 border-t border-zinc-100 dark:border-zinc-800 text-xs font-semibold text-emerald-600 dark:text-emerald-400 flex items-center justify-between">
+                <span>Пройти тест</span>
                 <span>→</span>
               </div>
-            </div>
+            </Link>
           </div>
         </div>
 

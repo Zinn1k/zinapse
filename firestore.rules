@@ -1,0 +1,352 @@
+rules_version = '2';
+
+// ===============================================================
+// Assumed Data Model & Architecture
+// ===============================================================
+//
+// Application: Free Quizlet Analog PWA (Local-First on Firebase Spark Plan)
+//
+// Collection: decks
+// Document ID: deck UUID string
+// Fields:
+//   - id: string (required, 1-64 chars, immutable)
+//   - ownerId: string (required, 1-128 chars, immutable)
+//   - title: string (required, 1-150 chars)
+//   - description: string (optional, 0-2000 chars)
+//   - isPublic: bool (required)
+//   - shareCode: string (required, 1-32 chars)
+//   - tags: list of strings (optional, max 20 items)
+//   - createdAt: number (required, timestamp ms, immutable)
+//   - updatedAt: number (required, timestamp ms)
+//   - syncedUserId: string (optional, 1-128 chars)
+//   - syncedAt: number (optional, timestamp ms)
+//   - userId: string (optional backwards-compatibility alias)
+//
+// Collection: cards
+// Document ID: card UUID string
+// Fields:
+//   - id: string (required, 1-64 chars, immutable)
+//   - deckId: string (required, 1-64 chars, immutable)
+//   - term: string (optional if front is present, 1-2000 chars)
+//   - front: string (optional alias for term, 1-2000 chars)
+//   - definition: string (optional, 0-10000 chars)
+//   - back: string (optional alias for definition, 0-10000 chars)
+//   - hint: string (optional, 0-2000 chars)
+//   - imageData: string (optional, base64 WebP <= 40KB, max 65000 chars)
+//   - frontImage: string (optional alias, max 65000 chars)
+//   - backImage: string (optional alias, max 65000 chars)
+//   - tags: list of strings (optional, max 20 items)
+//   - order: number (required, >= 0)
+//   - createdAt: number (required, timestamp ms, immutable)
+//   - updatedAt: number (required, timestamp ms)
+//   - syncedUserId: string (optional, 1-128 chars)
+//   - syncedAt: number (optional, timestamp ms)
+//   - ownerId: string (optional, 1-128 chars)
+//   - isPublic: bool (optional)
+//   - frontLang: string (optional, <= 10 chars)
+//   - backLang: string (optional, <= 10 chars)
+//
+// Collection: fsrs_states
+// Document ID: `${userId}_${cardId}`
+// Fields:
+//   - id: string (required, 1-128 chars, immutable)
+//   - cardId: string (required, 1-64 chars, immutable)
+//   - deckId: string (required, 1-64 chars, immutable)
+//   - userId: string (required, matches request.auth.uid, immutable)
+//   - state: int (required, 0..3: 0=New, 1=Learning, 2=Review, 3=Relearning)
+//   - due: number | string | timestamp (required)
+//   - stability: number (required, >= 0)
+//   - difficulty: number (required, 0..10)
+//   - elapsed_days: number (required, >= 0)
+//   - scheduled_days: number (required, >= 0)
+//   - reps: int (required, >= 0)
+//   - lapses: int (required, >= 0)
+//   - last_review: number | string | timestamp | null (optional)
+//   - learning_steps: int (optional, >= 0)
+//   - updatedAt: number (optional, timestamp ms)
+//   - syncedUserId: string (optional, matches request.auth.uid)
+//   - syncedAt: number (optional, timestamp ms)
+//
+// Collection: review_logs
+// Document ID: log UUID string
+// Fields:
+//   - id: string (required, 1-64 chars, immutable)
+//   - cardId: string (required, 1-64 chars, immutable)
+//   - userId: string (required, matches request.auth.uid, immutable)
+//   - rating: int (required, 1..4: 1=Again, 2=Hard, 3=Good, 4=Easy)
+//   - elapsedDays: number (required, >= 0)
+//   - reviewedAt: number (required, timestamp ms, immutable)
+//   - deckId: string (optional, 1-64 chars)
+//   - syncedUserId: string (optional, matches request.auth.uid)
+//   - syncedAt: number (optional, timestamp ms)
+//
+// Collection: match_scores
+// Document ID: score UUID string (multiplayer leaderboard)
+// Fields:
+//   - id: string (required, 1-64 chars, immutable)
+//   - deckId: string (required, 1-64 chars, immutable)
+//   - userId: string (required, matches request.auth.uid, immutable)
+//   - userName: string (required, 1-60 chars)
+//   - timeSeconds: number (required, float/int, > 0 and <= 3600)
+//   - pairsCount: int (required, 2..100)
+//   - createdAt: number (required, timestamp ms, immutable)
+//   - date: string (optional, <= 50 chars)
+//
+// ===============================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Global Helper Functions
+    // ===============================================================
+
+    // Check if the user is authenticated (Firebase Auth or Guest Anonymous)
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Check if user owns the document by passed userId
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Validate that a value is numeric (int or float)
+    function isNum(val) {
+      return val is int || val is float;
+    }
+
+    // Validate that immutable fields have not been modified during update
+    function areImmutableFieldsUnchanged(fields) {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(fields);
+    }
+
+    // Check if parent deck is marked public
+    function isDeckPublic(deckId) {
+      return exists(/databases/$(database)/documents/decks/$(deckId)) &&
+             get(/databases/$(database)/documents/decks/$(deckId)).data.isPublic == true;
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    // Validate deck schema and constraints (Create and Update)
+    function isValidDeck(data) {
+      return data.keys().hasOnly(['id', 'ownerId', 'title', 'description', 'isPublic', 'shareCode', 'tags', 'createdAt', 'updatedAt', 'syncedUserId', 'syncedAt', 'userId']) &&
+             data.keys().hasAll(['id', 'ownerId', 'title', 'isPublic', 'shareCode', 'createdAt', 'updatedAt']) &&
+             data.id is string && data.id.size() >= 1 && data.id.size() <= 64 &&
+             data.ownerId is string && data.ownerId.size() >= 1 && data.ownerId.size() <= 128 &&
+             data.title is string && data.title.size() >= 1 && data.title.size() <= 150 &&
+             (!('description' in data) || (data.description is string && data.description.size() <= 2000)) &&
+             data.isPublic is bool &&
+             data.shareCode is string && data.shareCode.size() >= 1 && data.shareCode.size() <= 32 &&
+             (!('tags' in data) || (data.tags is list && data.tags.size() <= 20)) &&
+             isNum(data.createdAt) && data.createdAt > 0 &&
+             isNum(data.updatedAt) && data.updatedAt > 0 &&
+             (!('syncedUserId' in data) || (data.syncedUserId is string && data.syncedUserId.size() >= 1 && data.syncedUserId.size() <= 128)) &&
+             (!('syncedAt' in data) || (isNum(data.syncedAt) && data.syncedAt > 0)) &&
+             (!('userId' in data) || (data.userId is string && data.userId.size() <= 128));
+    }
+
+    // Validate card schema and constraints (Create and Update)
+    function isValidCard(data) {
+      return data.keys().hasOnly(['id', 'deckId', 'term', 'definition', 'hint', 'imageData', 'tags', 'order', 'createdAt', 'updatedAt', 'syncedUserId', 'syncedAt', 'front', 'back', 'frontImage', 'backImage', 'frontLang', 'backLang', 'ownerId', 'isPublic']) &&
+             data.keys().hasAll(['id', 'deckId', 'order', 'createdAt', 'updatedAt']) &&
+             data.id is string && data.id.size() >= 1 && data.id.size() <= 64 &&
+             data.deckId is string && data.deckId.size() >= 1 && data.deckId.size() <= 64 &&
+             (('term' in data && data.term is string && data.term.size() >= 1 && data.term.size() <= 2000) ||
+              ('front' in data && data.front is string && data.front.size() >= 1 && data.front.size() <= 2000)) &&
+             (!('definition' in data) || (data.definition is string && data.definition.size() <= 10000)) &&
+             (!('back' in data) || (data.back is string && data.back.size() <= 10000)) &&
+             (!('hint' in data) || (data.hint is string && data.hint.size() <= 2000)) &&
+             (!('imageData' in data) || (data.imageData is string && data.imageData.size() <= 65000)) &&
+             (!('frontImage' in data) || (data.frontImage is string && data.frontImage.size() <= 65000)) &&
+             (!('backImage' in data) || (data.backImage is string && data.backImage.size() <= 65000)) &&
+             (!('tags' in data) || (data.tags is list && data.tags.size() <= 20)) &&
+             isNum(data.order) && data.order >= 0 &&
+             isNum(data.createdAt) && data.createdAt > 0 &&
+             isNum(data.updatedAt) && data.updatedAt > 0 &&
+             (!('syncedUserId' in data) || (data.syncedUserId is string && data.syncedUserId.size() >= 1 && data.syncedUserId.size() <= 128)) &&
+             (!('syncedAt' in data) || (isNum(data.syncedAt) && data.syncedAt > 0)) &&
+             (!('ownerId' in data) || (data.ownerId is string && data.ownerId.size() <= 128)) &&
+             (!('isPublic' in data) || (data.isPublic is bool)) &&
+             (!('frontLang' in data) || (data.frontLang is string && data.frontLang.size() <= 10)) &&
+             (!('backLang' in data) || (data.backLang is string && data.backLang.size() <= 10));
+    }
+
+    // Validate FSRS spaced repetition state record (Create and Update)
+    function isValidFSRSState(data) {
+      return data.keys().hasOnly(['id', 'cardId', 'deckId', 'userId', 'state', 'due', 'stability', 'difficulty', 'elapsed_days', 'scheduled_days', 'reps', 'lapses', 'last_review', 'learning_steps', 'updatedAt', 'syncedUserId', 'syncedAt']) &&
+             data.keys().hasAll(['id', 'cardId', 'deckId', 'userId', 'state', 'due', 'stability', 'difficulty', 'elapsed_days', 'scheduled_days', 'reps', 'lapses']) &&
+             data.id is string && data.id.size() >= 1 && data.id.size() <= 128 &&
+             data.cardId is string && data.cardId.size() >= 1 && data.cardId.size() <= 64 &&
+             data.deckId is string && data.deckId.size() >= 1 && data.deckId.size() <= 64 &&
+             data.userId is string && data.userId == request.auth.uid &&
+             data.state is int && data.state >= 0 && data.state <= 3 &&
+             (isNum(data.due) || (data.due is string && data.due.size() <= 40) || (data.due is timestamp)) &&
+             isNum(data.stability) && data.stability >= 0 &&
+             isNum(data.difficulty) && data.difficulty >= 0 && data.difficulty <= 10 &&
+             isNum(data.elapsed_days) && data.elapsed_days >= 0 &&
+             isNum(data.scheduled_days) && data.scheduled_days >= 0 &&
+             data.reps is int && data.reps >= 0 &&
+             data.lapses is int && data.lapses >= 0 &&
+             (!('last_review' in data) || data.last_review == null || isNum(data.last_review) || (data.last_review is string && data.last_review.size() <= 40) || (data.last_review is timestamp)) &&
+             (!('learning_steps' in data) || (data.learning_steps is int && data.learning_steps >= 0)) &&
+             (!('updatedAt' in data) || (isNum(data.updatedAt) && data.updatedAt > 0)) &&
+             (!('syncedUserId' in data) || (data.syncedUserId == request.auth.uid)) &&
+             (!('syncedAt' in data) || (isNum(data.syncedAt) && data.syncedAt > 0));
+    }
+
+    // Validate review log entry (Create and Update)
+    function isValidReviewLog(data) {
+      return data.keys().hasOnly(['id', 'cardId', 'userId', 'rating', 'elapsedDays', 'reviewedAt', 'deckId', 'syncedUserId', 'syncedAt']) &&
+             data.keys().hasAll(['id', 'cardId', 'userId', 'rating', 'elapsedDays', 'reviewedAt']) &&
+             data.id is string && data.id.size() >= 1 && data.id.size() <= 64 &&
+             data.cardId is string && data.cardId.size() >= 1 && data.cardId.size() <= 64 &&
+             data.userId is string && data.userId == request.auth.uid &&
+             data.rating is int && data.rating >= 1 && data.rating <= 4 &&
+             isNum(data.elapsedDays) && data.elapsedDays >= 0 &&
+             isNum(data.reviewedAt) && data.reviewedAt > 0 &&
+             (!('deckId' in data) || (data.deckId is string && data.deckId.size() <= 64)) &&
+             (!('syncedUserId' in data) || (data.syncedUserId == request.auth.uid)) &&
+             (!('syncedAt' in data) || (isNum(data.syncedAt) && data.syncedAt > 0));
+    }
+
+    // Validate multiplayer match leaderboard score
+    function isValidMatchScore(data) {
+      return data.keys().hasOnly(['id', 'deckId', 'userId', 'userName', 'timeSeconds', 'pairsCount', 'createdAt', 'date']) &&
+             data.keys().hasAll(['id', 'deckId', 'userId', 'userName', 'timeSeconds', 'pairsCount', 'createdAt']) &&
+             data.id is string && data.id.size() >= 1 && data.id.size() <= 64 &&
+             data.deckId is string && data.deckId.size() >= 1 && data.deckId.size() <= 64 &&
+             data.userId is string && data.userId == request.auth.uid &&
+             data.userName is string && data.userName.size() >= 1 && data.userName.size() <= 60 &&
+             isNum(data.timeSeconds) && data.timeSeconds > 0 && data.timeSeconds <= 3600 &&
+             data.pairsCount is int && data.pairsCount >= 2 && data.pairsCount <= 100 &&
+             isNum(data.createdAt) && data.createdAt > 0 &&
+             (!('date' in data) || (data.date is string && data.date.size() <= 50));
+    }
+
+    // ===============================================================
+    // Collections
+    // ===============================================================
+
+    // 1. Decks collection
+    match /decks/{deckId} {
+      // Read allowed if deck is public, or if caller is owner (by ownerId or syncedUserId)
+      allow read: if resource.data.isPublic == true ||
+        (isAuthenticated() && (
+          resource.data.ownerId == request.auth.uid ||
+          ('syncedUserId' in resource.data && resource.data.syncedUserId == request.auth.uid)
+        ));
+
+      // Create allowed for authenticated user claiming ownership
+      allow create: if isAuthenticated() &&
+        isValidDeck(request.resource.data) &&
+        (request.resource.data.ownerId == request.auth.uid ||
+         ('syncedUserId' in request.resource.data && request.resource.data.syncedUserId == request.auth.uid));
+
+      // Update allowed only by owner with validated schema and immutable ownership/timestamps
+      allow update: if isAuthenticated() &&
+        isValidDeck(request.resource.data) &&
+        areImmutableFieldsUnchanged(['id', 'ownerId', 'createdAt']) &&
+        (resource.data.ownerId == request.auth.uid ||
+         ('syncedUserId' in resource.data && resource.data.syncedUserId == request.auth.uid));
+
+      // Delete allowed only by owner
+      allow delete: if isAuthenticated() &&
+        (resource.data.ownerId == request.auth.uid ||
+         ('syncedUserId' in resource.data && resource.data.syncedUserId == request.auth.uid));
+    }
+
+    // 2. Cards collection
+    match /cards/{cardId} {
+      // Read allowed if card is public, belongs to a public deck, or owned by caller
+      allow read: if ('isPublic' in resource.data && resource.data.isPublic == true) ||
+        isDeckPublic(resource.data.deckId) ||
+        (isAuthenticated() && (
+          ('syncedUserId' in resource.data && resource.data.syncedUserId == request.auth.uid) ||
+          ('ownerId' in resource.data && resource.data.ownerId == request.auth.uid)
+        ));
+
+      // Create allowed for authenticated user claiming ownership
+      allow create: if isAuthenticated() &&
+        isValidCard(request.resource.data) &&
+        (('syncedUserId' in request.resource.data && request.resource.data.syncedUserId == request.auth.uid) ||
+         ('ownerId' in request.resource.data && request.resource.data.ownerId == request.auth.uid));
+
+      // Update allowed only by card owner with validated schema and immutable identity
+      allow update: if isAuthenticated() &&
+        isValidCard(request.resource.data) &&
+        areImmutableFieldsUnchanged(['id', 'deckId', 'createdAt']) &&
+        (('syncedUserId' in resource.data && resource.data.syncedUserId == request.auth.uid) ||
+         ('ownerId' in resource.data && resource.data.ownerId == request.auth.uid));
+
+      // Delete allowed only by card owner
+      allow delete: if isAuthenticated() &&
+        (('syncedUserId' in resource.data && resource.data.syncedUserId == request.auth.uid) ||
+         ('ownerId' in resource.data && resource.data.ownerId == request.auth.uid));
+    }
+
+    // 3. FSRS Spaced Repetition States collection (Private per user)
+    match /fsrs_states/{stateId} {
+      // Strictly restricted to user's own learning state
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+
+      allow create: if isAuthenticated() &&
+        request.resource.data.userId == request.auth.uid &&
+        isValidFSRSState(request.resource.data);
+
+      allow update: if isAuthenticated() &&
+        resource.data.userId == request.auth.uid &&
+        request.resource.data.userId == request.auth.uid &&
+        isValidFSRSState(request.resource.data) &&
+        areImmutableFieldsUnchanged(['id', 'cardId', 'deckId', 'userId']);
+
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+
+    // 4. Review Logs collection (Private per user)
+    match /review_logs/{logId} {
+      // Strictly restricted to user's own study history
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+
+      allow create: if isAuthenticated() &&
+        request.resource.data.userId == request.auth.uid &&
+        isValidReviewLog(request.resource.data);
+
+      allow update: if isAuthenticated() &&
+        resource.data.userId == request.auth.uid &&
+        request.resource.data.userId == request.auth.uid &&
+        isValidReviewLog(request.resource.data) &&
+        areImmutableFieldsUnchanged(['id', 'cardId', 'userId', 'reviewedAt']);
+
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+
+    // 5. Match Scores collection (Multiplayer Game Leaderboard)
+    match /match_scores/{scoreId} {
+      // Leaderboard is open to read for all users
+      allow read: if true;
+
+      // Submission requires authentication and ownership of the score record
+      allow create: if isAuthenticated() &&
+        request.resource.data.userId == request.auth.uid &&
+        isValidMatchScore(request.resource.data);
+
+      // Leaderboard scores are immutable to prevent score tampering
+      allow update: if false;
+
+      // Players may remove their own score records if desired
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+
+    // ===============================================================
+    // Default Deny Rule
+    // ===============================================================
+    // Deny all reads and writes to unspecified collections or paths
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

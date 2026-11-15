@@ -10,8 +10,15 @@ import {
   CheckCircle,
   AlertTriangle,
   RotateCcw,
+  Download,
+  Upload,
 } from "lucide-react";
-import { db, seedSampleDataIfEmpty } from "@/lib/db";
+import {
+  db,
+  seedSampleDataIfEmpty,
+  exportDatabaseToJSON,
+  importDatabaseFromJSON,
+} from "@/lib/db";
 import { getAvailableVoices, speakText } from "@/lib/speech";
 import { isFirebaseConfigured } from "@/lib/firebase";
 
@@ -93,6 +100,45 @@ export function SettingsModal({ isOpen, onClose, userId }: SettingsModalProps) {
       setStats({ decks: d, cards: c, fsrs: f });
       alert("Sample decks verified/restored!");
     }
+  };
+
+  const handleExportBackup = async () => {
+    try {
+      const json = await exportDatabaseToJSON();
+      const blob = new Blob([json], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `memorize-backup-${new Date().toISOString().split("T")[0]}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err: unknown) {
+      alert("Ошибка при экспорте резервной копии: " + (err instanceof Error ? err.message : String(err)));
+    }
+  };
+
+  const handleImportBackup = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const text = event.target?.result as string;
+        const result = await importDatabaseFromJSON(text);
+        const [d, c, f] = await Promise.all([
+          db.decks.count(),
+          db.cards.count(),
+          db.fsrs_states.count(),
+        ]);
+        setStats({ decks: d, cards: c, fsrs: f });
+        alert(`Резервная копия успешно восстановлена!\nКолод: ${result.decksCount}, Карточек: ${result.cardsCount}`);
+      } catch (err: unknown) {
+        alert("Ошибка при импорте резервной копии: " + (err instanceof Error ? err.message : String(err)));
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = "";
   };
 
   return (
@@ -244,6 +290,28 @@ export function SettingsModal({ isOpen, onClose, userId }: SettingsModalProps) {
                 <div className="text-lg font-bold text-zinc-900 dark:text-white">{stats.fsrs}</div>
                 <div className="text-[11px] text-zinc-500 dark:text-zinc-400">FSRS States</div>
               </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 pt-1">
+              <button
+                type="button"
+                onClick={handleExportBackup}
+                className="flex items-center justify-center space-x-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-800 dark:text-zinc-200 border border-zinc-200 dark:border-zinc-700 transition"
+              >
+                <Download className="w-3.5 h-3.5 text-indigo-500" />
+                <span>Export Backup (JSON)</span>
+              </button>
+
+              <label className="flex items-center justify-center space-x-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-800 dark:text-zinc-200 border border-zinc-200 dark:border-zinc-700 cursor-pointer transition">
+                <Upload className="w-3.5 h-3.5 text-emerald-500" />
+                <span>Restore Backup</span>
+                <input
+                  type="file"
+                  accept=".json,application/json"
+                  className="hidden"
+                  onChange={handleImportBackup}
+                />
+              </label>
             </div>
 
             <div className="flex items-center space-x-2 text-xs text-zinc-500 dark:text-zinc-400 pt-1">

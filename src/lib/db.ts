@@ -73,6 +73,7 @@ export interface SyncQueueItem {
   payload?: unknown;
   timestamp: number;
   attempts: number;
+  createdAt?: number;
 }
 
 export interface UserSettings {
@@ -271,4 +272,75 @@ export async function seedSampleDataIfEmpty(): Promise<void> {
     await db.decks.bulkAdd([mathDeck, spanishDeck]);
     await db.cards.bulkAdd([...mathCards, ...spanishCards]);
   });
+}
+
+export interface DatabaseBackup {
+  version: number;
+  exportedAt: number;
+  decks: Deck[];
+  cards: Card[];
+  fsrs_states: FSRSStateRecord[];
+  review_logs: ReviewLog[];
+  settings?: UserSettings[];
+}
+
+/**
+ * Exports all local Dexie tables to a structured JSON string.
+ */
+export async function exportDatabaseToJSON(): Promise<string> {
+  const [decks, cards, fsrs_states, review_logs, settings] = await Promise.all([
+    db.decks.toArray(),
+    db.cards.toArray(),
+    db.fsrs_states.toArray(),
+    db.review_logs.toArray(),
+    db.settings.toArray(),
+  ]);
+
+  const backup: DatabaseBackup = {
+    version: 2,
+    exportedAt: Date.now(),
+    decks,
+    cards,
+    fsrs_states,
+    review_logs,
+    settings,
+  };
+
+  return JSON.stringify(backup, null, 2);
+}
+
+/**
+ * Imports and restores all tables from a JSON backup.
+ */
+export async function importDatabaseFromJSON(jsonString: string): Promise<{
+  decksCount: number;
+  cardsCount: number;
+}> {
+  const data = JSON.parse(jsonString) as Partial<DatabaseBackup>;
+  if (!data.decks || !Array.isArray(data.decks)) {
+    throw new Error("Некорректный формат файла резервной копии: отсутствует массив колод.");
+  }
+
+  await db.transaction("rw", [db.decks, db.cards, db.fsrs_states, db.review_logs, db.settings], async () => {
+    if (data.decks && data.decks.length > 0) {
+      await db.decks.bulkPut(data.decks);
+    }
+    if (data.cards && data.cards.length > 0) {
+      await db.cards.bulkPut(data.cards);
+    }
+    if (data.fsrs_states && data.fsrs_states.length > 0) {
+      await db.fsrs_states.bulkPut(data.fsrs_states);
+    }
+    if (data.review_logs && data.review_logs.length > 0) {
+      await db.review_logs.bulkPut(data.review_logs);
+    }
+    if (data.settings && data.settings.length > 0) {
+      await db.settings.bulkPut(data.settings);
+    }
+  });
+
+  return {
+    decksCount: data.decks.length,
+    cardsCount: data.cards?.length || 0,
+  };
 }

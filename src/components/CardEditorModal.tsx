@@ -87,9 +87,10 @@ export function CardEditorModal({
         setBackImage(result.dataUrl);
       }
       setCompressionInfo(`Compressed: ${result.sizeKB} KB (${result.width}x${result.height} WebP)`);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      setError("Failed to compress image: " + (err.message || "Unknown error"));
+      const msg = err instanceof Error ? err.message : "Unknown error";
+      setError("Failed to compress image: " + msg);
     } finally {
       setImageCompressing(false);
     }

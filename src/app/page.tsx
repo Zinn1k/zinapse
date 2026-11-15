@@ -70,7 +70,7 @@ export default function Home() {
     <div className="min-h-screen bg-zinc-50 dark:bg-black text-zinc-900 dark:text-zinc-100 flex flex-col transition-colors">
       <AppHeader
         onOpenSettings={() => setIsSettingsOpen(true)}
-        onOpenAIGenerate={() => setIsAIGenerateOpen(true)}
+        onOpenAIGenerate={() => router.push("/create-ai")}
         currentUserId={currentUserId}
         setCurrentUserId={setCurrentUserId}
       />
@@ -115,7 +115,7 @@ export default function Home() {
                   </button>
 
                   <button
-                    onClick={() => setIsAIGenerateOpen(true)}
+                    onClick={() => router.push("/create-ai")}
                     className="flex items-center space-x-2 px-4 py-2.5 rounded-xl bg-indigo-500/30 hover:bg-indigo-500/40 text-white font-bold text-xs sm:text-sm border border-white/20 transition active:scale-95 backdrop-blur-sm"
                   >
                     <Sparkles className="w-4 h-4 text-amber-300" />

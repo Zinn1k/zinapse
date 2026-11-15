@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import Link from "next/link";
 import {
   X,
   Sparkles,
@@ -63,11 +64,12 @@ export function AIGenerateModal({
         const titleWords = prompt.trim().split(/\s+/).slice(0, 5).join(" ");
         setDeckTitle(titleWords.length > 3 ? titleWords : "AI Generated Deck");
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
       setError(
-        err.message ||
-          "Failed to generate cards. Ensure your Gemini API Key is set in Settings."
+        err instanceof Error
+          ? err.message
+          : "Failed to generate cards. Ensure your Gemini API Key is set in Settings."
       );
     } finally {
       setLoading(false);
@@ -111,20 +113,22 @@ export function AIGenerateModal({
       await db.decks.add(newDeck);
     }
 
-    const cardsToInsert: Card[] = selectedCards.map((c, i) => ({
-      id: generateId(),
-      deckId: finalDeckId!,
-      term: c.front,
-      definition: c.back,
-      front: c.front,
-      back: c.back,
-      hint: c.hint,
-      frontLang: c.frontLang || "en-US",
-      backLang: c.backLang || "en-US",
-      order: i + 1,
-      createdAt: now,
-      updatedAt: now,
-    }));
+    const cardsToInsert: Card[] = selectedCards.map((c, i) => {
+      const term = c.term || c.front || "";
+      const definition = c.definition || c.back || "";
+      return {
+        id: generateId(),
+        deckId: finalDeckId!,
+        term,
+        definition,
+        front: term,
+        back: definition,
+        hint: c.hint,
+        order: i + 1,
+        createdAt: now,
+        updatedAt: now,
+      };
+    });
 
     await db.cards.bulkAdd(cardsToInsert);
 
@@ -172,6 +176,19 @@ export function AIGenerateModal({
           {generatedCards.length === 0 ? (
             /* Input Form */
             <div className="space-y-4">
+              <div className="p-3 rounded-xl bg-indigo-50/60 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/50 flex items-center justify-between">
+                <span className="text-xs text-indigo-700 dark:text-indigo-300">
+                  Нужно загрузить большой файл .txt или .md?
+                </span>
+                <Link
+                  href="/create-ai"
+                  onClick={onClose}
+                  className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1"
+                >
+                  Открыть /create-ai →
+                </Link>
+              </div>
+
               <div>
                 <label className="block text-sm font-semibold text-zinc-800 dark:text-zinc-200 mb-1.5">
                   Topic, Notes, or Textbook Excerpt
@@ -271,10 +288,10 @@ export function AIGenerateModal({
                             <span className="text-xs font-semibold text-indigo-500 mr-1.5">
                               #{idx + 1}
                             </span>
-                            <MarkdownMath content={card.front} />
+                            <MarkdownMath content={card.term || card.front || ""} />
                           </div>
                           <div className="text-xs text-zinc-600 dark:text-zinc-300 pt-1 border-t border-zinc-100 dark:border-zinc-800">
-                            <MarkdownMath content={card.back} />
+                            <MarkdownMath content={card.definition || card.back || ""} />
                           </div>
                           {card.hint && (
                             <p className="text-[11px] text-amber-600 dark:text-amber-400 italic">

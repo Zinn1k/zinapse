@@ -11,10 +11,13 @@ import {
 } from "firebase/auth";
 import {
   getFirestore,
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
   type Firestore,
 } from "firebase/firestore";
 
-// Firebase config from environment variables (Spark Plan friendly: Auth + Firestore only)
+// Firebase config from environment variables (Spark Plan friendly: Auth + Firestore only, zero paid storage)
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
   authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
@@ -39,7 +42,18 @@ if (typeof window !== "undefined" && isFirebaseConfigured()) {
   try {
     app = getApps().length > 0 ? getApps()[0] : initializeApp(firebaseConfig);
     auth = getAuth(app);
-    dbFirestore = getFirestore(app);
+
+    try {
+      // Enable multi-tab persistent offline IndexedDB cache for Firestore
+      dbFirestore = initializeFirestore(app, {
+        localCache: persistentLocalCache({
+          tabManager: persistentMultipleTabManager(),
+        }),
+      });
+    } catch {
+      // Fallback if already initialized
+      dbFirestore = getFirestore(app);
+    }
   } catch (error) {
     console.warn("Failed to initialize Firebase:", error);
   }
@@ -47,15 +61,24 @@ if (typeof window !== "undefined" && isFirebaseConfigured()) {
 
 export { app, auth, dbFirestore };
 
+/**
+ * 1-click Google Sign-in
+ */
 export async function signInWithGoogle(): Promise<User | null> {
   if (!auth) {
-    throw new Error("Firebase is not configured yet. Please configure your Firebase credentials.");
+    throw new Error(
+      "Firebase не настроен. Укажите ключи NEXT_PUBLIC_FIREBASE_* в файле .env.local"
+    );
   }
   const provider = new GoogleAuthProvider();
+  provider.setCustomParameters({ prompt: "select_account" });
   const credential = await signInWithPopup(auth, provider);
   return credential.user;
 }
 
+/**
+ * Anonymous / Guest sign-in for viewing public decks without an account
+ */
 export async function signInAsGuest(): Promise<User | null> {
   if (!auth) {
     return null;

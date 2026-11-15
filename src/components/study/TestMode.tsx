@@ -37,7 +37,7 @@ export function TestMode({ deck, cards, onExit }: TestModeProps) {
     null
   );
 
-  const initTest = () => {
+  const initTest = React.useCallback(() => {
     const testQuestions: TestQuestion[] = [];
     const shuffled = [...cards].sort(() => Math.random() - 0.5);
 
@@ -99,13 +99,13 @@ export function TestMode({ deck, cards, onExit }: TestModeProps) {
     setUserAnswers({});
     setIsSubmitted(false);
     setScore(null);
-  };
+  }, [cards]);
 
   React.useEffect(() => {
     if (cards.length > 0) {
       initTest();
     }
-  }, [cards]);
+  }, [cards, initTest]);
 
   const handleSelectAnswer = (qId: string, answer: string) => {
     if (isSubmitted) return;
@@ -221,7 +221,6 @@ export function TestMode({ deck, cards, onExit }: TestModeProps) {
       <div className="space-y-6">
         {questions.map((q, idx) => {
           const userAns = userAnswers[q.id] || "";
-          const isQuestionAnswered = Boolean(userAns);
 
           let isQuestionCorrect = false;
           if (isSubmitted) {

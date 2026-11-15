@@ -53,7 +53,6 @@ export function LearnMode({ deck, cards, userId, onExit }: LearnModeProps) {
       const states = await db.fsrs_states.where("deckId").equals(deck.id).toArray();
       const userStates = states.filter((s) => s.userId === userId);
       const stateMap = new Map(userStates.map((s) => [s.cardId, s]));
-      const now = Date.now();
 
       // Sort: due cards first, then learning, then new
       const sorted = [...cards].sort((a, b) => {

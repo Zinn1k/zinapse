@@ -1,9 +1,18 @@
 import { db, type Deck, type Card, type FSRSStateRecord } from "./db";
 import { dbFirestore, isFirebaseConfigured } from "./firebase";
-import { doc, setDoc, deleteDoc, getDocs, collection, query, where } from "firebase/firestore";
+import {
+  doc,
+  setDoc,
+  deleteDoc,
+  getDocs,
+  collection,
+  query,
+  where,
+} from "firebase/firestore";
 
 export interface SyncState {
   isSyncing: boolean;
+  isOnline: boolean;
   pendingCount: number;
   lastSyncedAt: number | null;
   error: string | null;
@@ -12,6 +21,19 @@ export interface SyncState {
 let syncInProgress = false;
 let lastSyncedTime: number | null = null;
 let syncListeners: ((state: SyncState) => void)[] = [];
+let isOnline = typeof window !== "undefined" ? navigator.onLine : true;
+
+// Setup online/offline listeners
+if (typeof window !== "undefined") {
+  window.addEventListener("online", () => {
+    isOnline = true;
+    notifySyncListeners();
+  });
+  window.addEventListener("offline", () => {
+    isOnline = false;
+    notifySyncListeners();
+  });
+}
 
 export function subscribeSyncState(callback: (state: SyncState) => void) {
   syncListeners.push(callback);
@@ -22,21 +44,33 @@ export function subscribeSyncState(callback: (state: SyncState) => void) {
 }
 
 async function notifySyncListeners(error: string | null = null) {
-  const pendingCount = await db.sync_queue.count();
-  const state: SyncState = {
-    isSyncing: syncInProgress,
-    pendingCount,
-    lastSyncedAt: lastSyncedTime,
-    error,
-  };
-  syncListeners.forEach((cb) => cb(state));
+  try {
+    const pendingCount = await db.sync_queue.count();
+    const state: SyncState = {
+      isSyncing: syncInProgress,
+      isOnline,
+      pendingCount,
+      lastSyncedAt: lastSyncedTime,
+      error,
+    };
+    syncListeners.forEach((cb) => cb(state));
+  } catch {
+    // Database may be closing or not ready
+  }
 }
 
 /**
- * Processes local pending sync queue items to Cloud Firestore asynchronously.
+ * Uploads local pending changes from Dexie sync_queue to Cloud Firestore.
  */
 export async function processSyncQueue(userId: string): Promise<void> {
-  if (!isFirebaseConfigured() || !dbFirestore || syncInProgress || !userId || userId === "local_guest") {
+  if (
+    !isFirebaseConfigured() ||
+    !dbFirestore ||
+    syncInProgress ||
+    !userId ||
+    userId === "local_guest" ||
+    !isOnline
+  ) {
     return;
   }
 
@@ -52,7 +86,7 @@ export async function processSyncQueue(userId: string): Promise<void> {
       if (item.action === "delete") {
         await deleteDoc(docRef);
       } else if (item.action === "upsert" && item.payload) {
-        // Enforce owner userId on cloud payload
+        // Enforce owner / syncedUserId
         const cloudData = {
           ...item.payload,
           syncedUserId: userId,
@@ -61,15 +95,15 @@ export async function processSyncQueue(userId: string): Promise<void> {
         await setDoc(docRef, cloudData, { merge: true });
       }
 
-      // Remove from Dexie queue upon success
+      // Remove from local Dexie queue once written
       await db.sync_queue.delete(item.id);
     }
 
     lastSyncedTime = Date.now();
     await notifySyncListeners();
   } catch (err: unknown) {
-    console.error("Background sync error:", err);
-    const message = err instanceof Error ? err.message : "Sync failed";
+    console.error("Background push sync error:", err);
+    const message = err instanceof Error ? err.message : "Sync push failed";
     await notifySyncListeners(message);
   } finally {
     syncInProgress = false;
@@ -78,10 +112,16 @@ export async function processSyncQueue(userId: string): Promise<void> {
 }
 
 /**
- * Downloads user's cloud decks, cards, and fsrs_states into Dexie (merging newer items).
+ * Downloads user's cloud decks, cards, and fsrs_states into Dexie with updatedAt conflict resolution.
  */
 export async function syncDownFromCloud(userId: string): Promise<void> {
-  if (!isFirebaseConfigured() || !dbFirestore || !userId || userId === "local_guest") {
+  if (
+    !isFirebaseConfigured() ||
+    !dbFirestore ||
+    !userId ||
+    userId === "local_guest" ||
+    !isOnline
+  ) {
     return;
   }
 
@@ -89,17 +129,35 @@ export async function syncDownFromCloud(userId: string): Promise<void> {
   await notifySyncListeners();
 
   try {
-    // 1. Fetch user decks
+    // 1. Fetch user decks from Firestore
     const decksSnap = await getDocs(
       query(collection(dbFirestore, "decks"), where("ownerId", "==", userId))
     );
     const cloudDecks: Deck[] = [];
     decksSnap.forEach((d) => cloudDecks.push(d.data() as Deck));
 
-    // 2. Fetch user cards
+    // Conflict resolution for decks by updatedAt
+    for (const cDeck of cloudDecks) {
+      const localDeck = await db.decks.get(cDeck.id);
+      if (!localDeck || (cDeck.updatedAt || 0) >= (localDeck.updatedAt || 0)) {
+        await db.decks.put(cDeck);
+      } else {
+        // Local is newer -> enqueue for push
+        await db.sync_queue.put({
+          id: `deck_${localDeck.id}`,
+          collection: "decks",
+          docId: localDeck.id,
+          action: "upsert",
+          payload: localDeck,
+          timestamp: Date.now(),
+          attempts: 0,
+        });
+      }
+    }
+
+    // 2. Fetch user cards from Firestore
     const userDeckIds = cloudDecks.map((d) => d.id);
     if (userDeckIds.length > 0) {
-      // In Firestore, where-in is capped at 30 items
       for (let i = 0; i < userDeckIds.length; i += 30) {
         const batchIds = userDeckIds.slice(i, i + 30);
         const cardsSnap = await getDocs(
@@ -108,8 +166,23 @@ export async function syncDownFromCloud(userId: string): Promise<void> {
         const cloudCards: Card[] = [];
         cardsSnap.forEach((c) => cloudCards.push(c.data() as Card));
 
-        // Save cards to Dexie
-        await db.cards.bulkPut(cloudCards);
+        for (const cCard of cloudCards) {
+          const localCard = await db.cards.get(cCard.id);
+          if (!localCard || (cCard.updatedAt || 0) >= (localCard.updatedAt || 0)) {
+            await db.cards.put(cCard);
+          } else {
+            // Local is newer -> enqueue for push
+            await db.sync_queue.put({
+              id: `card_${localCard.id}`,
+              collection: "cards",
+              docId: localCard.id,
+              action: "upsert",
+              payload: localCard,
+              timestamp: Date.now(),
+              attempts: 0,
+            });
+          }
+        }
       }
     }
 
@@ -120,18 +193,59 @@ export async function syncDownFromCloud(userId: string): Promise<void> {
     const cloudStates: FSRSStateRecord[] = [];
     statesSnap.forEach((s) => cloudStates.push(s.data() as FSRSStateRecord));
 
-    // Merge into local Dexie
-    if (cloudDecks.length > 0) await db.decks.bulkPut(cloudDecks);
-    if (cloudStates.length > 0) await db.fsrs_states.bulkPut(cloudStates);
+    for (const cState of cloudStates) {
+      const localState = await db.fsrs_states.get(cState.id);
+      const cloudReviewTime = cState.last_review
+        ? new Date(cState.last_review).getTime()
+        : 0;
+      const localReviewTime = localState?.last_review
+        ? new Date(localState.last_review).getTime()
+        : 0;
+
+      if (!localState || cloudReviewTime >= localReviewTime) {
+        await db.fsrs_states.put(cState);
+      } else {
+        // Local is newer -> enqueue for push
+        await db.sync_queue.put({
+          id: `fsrs_${localState.id}`,
+          collection: "fsrs_states",
+          docId: localState.id,
+          action: "upsert",
+          payload: localState,
+          timestamp: Date.now(),
+          attempts: 0,
+        });
+      }
+    }
 
     lastSyncedTime = Date.now();
     await notifySyncListeners();
   } catch (err: unknown) {
-    console.error("Sync down error:", err);
-    const message = err instanceof Error ? err.message : "Failed to download data";
+    console.error("Sync pull error:", err);
+    const message = err instanceof Error ? err.message : "Failed to pull cloud data";
     await notifySyncListeners(message);
   } finally {
     syncInProgress = false;
     await notifySyncListeners();
   }
+}
+
+/**
+ * Performs a complete bidirectional sync (push local queue, then pull newer items).
+ */
+export async function triggerFullSync(userId: string): Promise<void> {
+  await processSyncQueue(userId);
+  await syncDownFromCloud(userId);
+}
+
+let debounceTimer: NodeJS.Timeout | null = null;
+
+/**
+ * Triggers debounced background push after local mutations (0ms latency for UI).
+ */
+export function scheduleSync(userId: string) {
+  if (debounceTimer) clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(() => {
+    processSyncQueue(userId).catch(() => {});
+  }, 2000);
 }
