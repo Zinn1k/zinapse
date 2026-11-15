@@ -9,9 +9,17 @@ import {
   ArrowLeft,
   Flame,
   Award,
+  ArrowLeftRight,
 } from "lucide-react";
 import { type Card, type Deck, db } from "@/lib/db";
 import { rateCardFSRS, Rating } from "@/lib/fsrs";
+import {
+  hasCloze,
+  renderClozeQuestion,
+  renderClozeAnswer,
+  stripClozeSyntax,
+  extractClozeItems,
+} from "@/lib/cloze";
 import { MarkdownMath } from "../MarkdownMath";
 import confetti from "canvas-confetti";
 
@@ -25,6 +33,9 @@ interface LearnModeProps {
 interface QuestionItem {
   card: Card;
   type: "choice" | "written";
+  prompt: string;
+  correctAnswer: string;
+  isCloze?: boolean;
   options?: string[]; // 4 multiple choice options
   correctIndex?: number;
 }
@@ -36,6 +47,7 @@ export function LearnMode({ deck, cards, userId, onExit }: LearnModeProps) {
   const [writtenAnswer, setWrittenAnswer] = useState("");
   const [isAnswered, setIsAnswered] = useState(false);
   const [isCorrect, setIsCorrect] = useState(false);
+  const [isReversed, setIsReversed] = useState(false);
   const [streak, setStreak] = useState(0);
   const [correctCount, setCorrectCount] = useState(0);
   const [totalAttempted, setTotalAttempted] = useState(0);
@@ -83,23 +95,49 @@ export function LearnMode({ deck, cards, userId, onExit }: LearnModeProps) {
     }
 
     const nextCard = queue[0];
+    const isCloze = hasCloze(nextCard.term || nextCard.front || "");
+    const clozeItems = isCloze ? extractClozeItems(nextCard.term || nextCard.front || "") : [];
+
+    let questionPrompt = "";
+    let correctAns = "";
+
+    if (isCloze) {
+      questionPrompt = renderClozeQuestion(nextCard.term || nextCard.front || "");
+      correctAns = clozeItems[0]?.answer || nextCard.definition || nextCard.back || "";
+    } else if (isReversed) {
+      questionPrompt = nextCard.definition || nextCard.back || "";
+      correctAns = nextCard.term || nextCard.front || "";
+    } else {
+      questionPrompt = nextCard.term || nextCard.front || "";
+      correctAns = nextCard.definition || nextCard.back || "";
+    }
+
     const isMultipleChoice = cards.length >= 4;
 
     if (isMultipleChoice) {
       // Pick 3 distractor answers from other cards
       const otherCards = cards.filter((c) => c.id !== nextCard.id);
       const shuffledOthers = [...otherCards].sort(() => Math.random() - 0.5);
-      const distractors = shuffledOthers
-        .slice(0, 3)
-        .map((c) => c.definition || c.back || "");
+      const distractors = shuffledOthers.slice(0, 3).map((c) => {
+        if (isCloze) {
+          const items = extractClozeItems(c.term || c.front || "");
+          return items[0]?.answer || c.term || c.front || c.definition || c.back || "";
+        } else if (isReversed) {
+          return stripClozeSyntax(c.term || c.front || "");
+        } else {
+          return c.definition || c.back || "";
+        }
+      });
 
-      const correctAns = nextCard.definition || nextCard.back || "";
       const allChoices = [...distractors, correctAns].sort(() => Math.random() - 0.5);
       const correctIdx = allChoices.indexOf(correctAns);
 
       setCurrentQuestion({
         card: nextCard,
         type: "choice",
+        prompt: questionPrompt,
+        correctAnswer: correctAns,
+        isCloze,
         options: allChoices,
         correctIndex: correctIdx,
       });
@@ -107,13 +145,16 @@ export function LearnMode({ deck, cards, userId, onExit }: LearnModeProps) {
       setCurrentQuestion({
         card: nextCard,
         type: "written",
+        prompt: questionPrompt,
+        correctAnswer: correctAns,
+        isCloze,
       });
     }
 
     setIsAnswered(false);
     setSelectedChoice(null);
     setWrittenAnswer("");
-  }, [queue, loading, cards, totalAttempted]);
+  }, [queue, loading, cards, totalAttempted, isReversed]);
 
   const handleSelectChoice = (index: number) => {
     if (isAnswered || !currentQuestion) return;
@@ -139,12 +180,12 @@ export function LearnMode({ deck, cards, userId, onExit }: LearnModeProps) {
     if (isAnswered || !currentQuestion || !writtenAnswer.trim()) return;
 
     const cleanInput = writtenAnswer.trim().toLowerCase().replace(/[.,!?'"`$]/g, "");
-    const cleanBack = (currentQuestion.card.definition || currentQuestion.card.back || "")
+    const cleanTarget = (currentQuestion.correctAnswer || "")
       .trim()
       .toLowerCase()
       .replace(/[.,!?'"`$]/g, "");
 
-    const correct = cleanInput === cleanBack || cleanBack.includes(cleanInput);
+    const correct = cleanInput === cleanTarget || (cleanTarget.length > 3 && cleanTarget.includes(cleanInput));
 
     setIsAnswered(true);
     setIsCorrect(correct);
@@ -250,7 +291,25 @@ export function LearnMode({ deck, cards, userId, onExit }: LearnModeProps) {
           <span>Exit Learn</span>
         </button>
 
-        <div className="flex items-center space-x-4">
+        <div className="flex items-center space-x-3">
+          <button
+            onClick={() => {
+              setIsReversed((r) => !r);
+              setIsAnswered(false);
+              setSelectedChoice(null);
+              setWrittenAnswer("");
+            }}
+            className={`p-1.5 rounded-lg border text-xs transition flex items-center space-x-1.5 ${
+              isReversed
+                ? "bg-indigo-50 border-indigo-300 dark:bg-indigo-950/60 dark:border-indigo-800 text-indigo-600 dark:text-indigo-400 font-semibold"
+                : "border-zinc-200 dark:border-zinc-800 text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+            }`}
+            title="Обратный режим (Определение → Термин)"
+          >
+            <ArrowLeftRight className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Обратный</span>
+          </button>
+
           {streak > 1 && (
             <div className="flex items-center space-x-1 px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 text-xs font-bold border border-amber-500/20 animate-pulse">
               <Flame className="w-3.5 h-3.5 fill-current" />
@@ -266,9 +325,20 @@ export function LearnMode({ deck, cards, userId, onExit }: LearnModeProps) {
       {/* Question Card */}
       <div className="p-6 sm:p-8 rounded-3xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-sm space-y-4">
         <div className="flex items-center justify-between text-xs text-zinc-400">
-          <span className="uppercase tracking-widest font-semibold text-indigo-500">
-            Question
-          </span>
+          <div className="flex items-center space-x-2">
+            <span className="uppercase tracking-widest font-semibold text-indigo-500">
+              {currentQuestion.isCloze
+                ? "Заполните пропуск (Cloze)"
+                : isReversed
+                ? "Определение → Термин"
+                : "Вопрос / Термин"}
+            </span>
+            {currentQuestion.isCloze && (
+              <span className="px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 text-[10px] font-bold">
+                Cloze
+              </span>
+            )}
+          </div>
           {currentQuestion.card.hint && (
             <span className="text-amber-600 dark:text-amber-400 italic">
               Hint: {currentQuestion.card.hint}
@@ -277,12 +347,20 @@ export function LearnMode({ deck, cards, userId, onExit }: LearnModeProps) {
         </div>
 
         <div className="text-lg sm:text-xl font-medium text-zinc-900 dark:text-white leading-relaxed">
-          <MarkdownMath content={currentQuestion.card.term || currentQuestion.card.front || ""} />
+          <MarkdownMath content={currentQuestion.prompt} />
         </div>
 
-        {(currentQuestion.card.imageData || currentQuestion.card.frontImage) && (
+        {(isReversed
+          ? currentQuestion.card.backImage || currentQuestion.card.imageData || currentQuestion.card.frontImage
+          : currentQuestion.card.imageData || currentQuestion.card.frontImage) && (
           <img
-            src={currentQuestion.card.imageData || currentQuestion.card.frontImage}
+            src={
+              isReversed
+                ? currentQuestion.card.backImage ||
+                  currentQuestion.card.imageData ||
+                  currentQuestion.card.frontImage
+                : currentQuestion.card.imageData || currentQuestion.card.frontImage
+            }
             alt="Question illustration"
             className="max-h-48 mx-auto rounded-xl object-contain shadow-sm mt-3"
           />
@@ -386,9 +464,20 @@ export function LearnMode({ deck, cards, userId, onExit }: LearnModeProps) {
               )}
             </div>
             {!isCorrect && (
-              <div className="text-xs text-zinc-700 dark:text-zinc-300">
-                <span className="font-semibold">Correct Answer: </span>
-                <MarkdownMath content={currentQuestion.card.definition || currentQuestion.card.back || ""} />
+              <div className="text-xs text-zinc-700 dark:text-zinc-300 space-y-1">
+                <div>
+                  <span className="font-semibold">Correct Answer: </span>
+                  <MarkdownMath content={currentQuestion.correctAnswer} />
+                </div>
+                {currentQuestion.isCloze && (
+                  <div className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                    <MarkdownMath
+                      content={renderClozeAnswer(
+                        currentQuestion.card.term || currentQuestion.card.front || ""
+                      )}
+                    />
+                  </div>
+                )}
               </div>
             )}
           </div>

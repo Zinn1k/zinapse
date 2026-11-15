@@ -9,6 +9,7 @@ import {
   Search,
   BookOpen,
   Clock,
+  BarChart2,
 } from "lucide-react";
 import { db, seedSampleDataIfEmpty, GUEST_USER_ID } from "@/lib/db";
 import { generateId } from "@/lib/utils";
@@ -18,6 +19,7 @@ import { DeckDetailView } from "@/components/DeckDetailView";
 import { CreateEditDeckModal } from "@/components/CreateEditDeckModal";
 import { AIGenerateModal } from "@/components/AIGenerateModal";
 import { SettingsModal } from "@/components/SettingsModal";
+import { FSRSAnalyticsModal } from "@/components/FSRSAnalyticsModal";
 
 export default function Home() {
   const router = useRouter();
@@ -30,6 +32,7 @@ export default function Home() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isAIGenerateOpen, setIsAIGenerateOpen] = useState(false);
   const [isCreateDeckOpen, setIsCreateDeckOpen] = useState(false);
+  const [isAnalyticsOpen, setIsAnalyticsOpen] = useState(false);
 
   // Ensure database sample data is seeded on first load
   useEffect(() => {
@@ -120,6 +123,14 @@ export default function Home() {
                   >
                     <Sparkles className="w-4 h-4 text-amber-300" />
                     <span>Generate with AI</span>
+                  </button>
+
+                  <button
+                    onClick={() => setIsAnalyticsOpen(true)}
+                    className="flex items-center space-x-2 px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-semibold text-xs sm:text-sm border border-white/15 transition active:scale-95 backdrop-blur-sm"
+                  >
+                    <BarChart2 className="w-4 h-4 text-indigo-200" />
+                    <span>Аналитика FSRS</span>
                   </button>
                 </div>
               </div>
@@ -243,6 +254,12 @@ export default function Home() {
       <SettingsModal
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
+        userId={currentUserId}
+      />
+
+      <FSRSAnalyticsModal
+        isOpen={isAnalyticsOpen}
+        onClose={() => setIsAnalyticsOpen(false)}
         userId={currentUserId}
       />
     </div>

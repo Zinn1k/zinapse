@@ -13,6 +13,7 @@ import {
   HelpCircle,
   CheckCircle,
   ArrowLeft,
+  ArrowLeftRight,
 } from "lucide-react";
 import { type Card, type Deck } from "@/lib/db";
 import {
@@ -22,6 +23,12 @@ import {
   type IntervalPreview,
 } from "@/lib/fsrs";
 import { speakText } from "@/lib/speech";
+import {
+  hasCloze,
+  renderClozeQuestion,
+  renderClozeAnswer,
+  stripClozeSyntax,
+} from "@/lib/cloze";
 import { MarkdownMath } from "../MarkdownMath";
 import confetti from "canvas-confetti";
 
@@ -41,6 +48,7 @@ export function FlashcardsMode({
   const [cards, setCards] = useState<Card[]>(initialCards);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
+  const [isReversed, setIsReversed] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showHint, setShowHint] = useState(false);
   const [intervals, setIntervals] = useState<IntervalPreview[]>([]);
@@ -94,10 +102,22 @@ export function FlashcardsMode({
   const handleTTS = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!currentCard) return;
-    if (isFlipped) {
-      speakText(currentCard.definition || currentCard.back || "", { lang: currentCard.backLang });
+
+    const frontText = stripClozeSyntax(currentCard.term || currentCard.front || "");
+    const backText = currentCard.definition || currentCard.back || "";
+
+    if (isReversed) {
+      if (isFlipped) {
+        speakText(frontText, { lang: currentCard.frontLang });
+      } else {
+        speakText(backText, { lang: currentCard.backLang });
+      }
     } else {
-      speakText(currentCard.term || currentCard.front || "", { lang: currentCard.frontLang });
+      if (isFlipped) {
+        speakText(backText, { lang: currentCard.backLang });
+      } else {
+        speakText(frontText, { lang: currentCard.frontLang });
+      }
     }
   };
 
@@ -207,6 +227,24 @@ export function FlashcardsMode({
 
         <div className="flex items-center space-x-2">
           <button
+            onClick={() => {
+              setIsReversed((r) => !r);
+              setIsFlipped(false);
+            }}
+            className={`p-1.5 rounded-lg border transition ${
+              isReversed
+                ? "bg-indigo-50 border-indigo-300 dark:bg-indigo-950/60 dark:border-indigo-800 text-indigo-600 dark:text-indigo-400 font-semibold"
+                : "border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-900"
+            }`}
+            title={
+              isReversed
+                ? "Обратный режим (Определение → Термин)"
+                : "Включить обратный режим (Определение → Термин)"
+            }
+          >
+            <ArrowLeftRight className="w-4 h-4" />
+          </button>
+          <button
             onClick={handleShuffle}
             className="p-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-900 text-zinc-600 dark:text-zinc-400 transition"
             title="Shuffle cards"
@@ -243,7 +281,7 @@ export function FlashcardsMode({
           <div className="absolute inset-0 backface-hidden w-full h-full p-8 sm:p-12 rounded-3xl bg-white dark:bg-zinc-900 border-2 border-zinc-200/80 dark:border-zinc-800 flex flex-col justify-between overflow-y-auto">
             <div className="flex items-center justify-between text-xs text-zinc-400">
               <span className="uppercase tracking-widest font-semibold text-indigo-500">
-                Front Side
+                {isReversed ? "Определение (Лицевая)" : "Лицевая сторона"}
               </span>
               <div className="flex items-center space-x-2">
                 {currentCard.hint && (
@@ -270,12 +308,26 @@ export function FlashcardsMode({
 
             <div className="my-auto py-4 text-center">
               <div className="text-xl sm:text-2xl font-medium text-zinc-900 dark:text-white leading-relaxed">
-                <MarkdownMath content={currentCard.term || currentCard.front || ""} />
+                {isReversed ? (
+                  <MarkdownMath content={currentCard.definition || currentCard.back || ""} />
+                ) : hasCloze(currentCard.term || currentCard.front || "") ? (
+                  <MarkdownMath
+                    content={renderClozeQuestion(currentCard.term || currentCard.front || "")}
+                  />
+                ) : (
+                  <MarkdownMath content={currentCard.term || currentCard.front || ""} />
+                )}
               </div>
 
-              {(currentCard.imageData || currentCard.frontImage) && (
+              {(isReversed
+                ? currentCard.backImage
+                : currentCard.imageData || currentCard.frontImage) && (
                 <img
-                  src={currentCard.imageData || currentCard.frontImage}
+                  src={
+                    isReversed
+                      ? currentCard.backImage
+                      : currentCard.imageData || currentCard.frontImage
+                  }
                   alt="Illustration"
                   className="mt-6 max-h-56 mx-auto rounded-xl object-contain shadow-sm"
                 />
@@ -301,7 +353,7 @@ export function FlashcardsMode({
           <div className="absolute inset-0 backface-hidden rotate-y-180 w-full h-full p-8 sm:p-12 rounded-3xl bg-white dark:bg-zinc-900 border-2 border-indigo-500/40 dark:border-indigo-500/30 flex flex-col justify-between overflow-y-auto">
             <div className="flex items-center justify-between text-xs text-zinc-400">
               <span className="uppercase tracking-widest font-semibold text-emerald-500">
-                Back Side
+                {isReversed ? "Термин (Обратная)" : "Обратная сторона"}
               </span>
               <button
                 onClick={handleTTS}
@@ -314,12 +366,33 @@ export function FlashcardsMode({
 
             <div className="my-auto py-4 text-center">
               <div className="text-lg sm:text-xl text-zinc-800 dark:text-zinc-100 leading-relaxed">
-                <MarkdownMath content={currentCard.definition || currentCard.back || ""} />
+                {isReversed ? (
+                  <MarkdownMath content={currentCard.term || currentCard.front || ""} />
+                ) : hasCloze(currentCard.term || currentCard.front || "") ? (
+                  <div className="space-y-3">
+                    <MarkdownMath
+                      content={renderClozeAnswer(currentCard.term || currentCard.front || "")}
+                    />
+                    {currentCard.definition && (
+                      <div className="text-sm text-zinc-500 dark:text-zinc-400 pt-2 border-t border-zinc-100 dark:border-zinc-800">
+                        <MarkdownMath content={currentCard.definition} />
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <MarkdownMath content={currentCard.definition || currentCard.back || ""} />
+                )}
               </div>
 
-              {currentCard.backImage && (
+              {(isReversed
+                ? currentCard.imageData || currentCard.frontImage
+                : currentCard.backImage) && (
                 <img
-                  src={currentCard.backImage}
+                  src={
+                    isReversed
+                      ? currentCard.imageData || currentCard.frontImage
+                      : currentCard.backImage
+                  }
                   alt="Back illustration"
                   className="mt-6 max-h-56 mx-auto rounded-xl object-contain shadow-sm"
                 />

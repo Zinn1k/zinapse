@@ -11,9 +11,10 @@ export interface GenerateDeckOptions {
   apiKey?: string;
   prompt: string;
   text?: string;
+  image?: string; // base64 data URL
   count?: number;
   difficulty?: "beginner" | "intermediate" | "advanced";
-  style?: "term-definition" | "exam-qa" | "concept-summary";
+  style?: "term-definition" | "exam-qa" | "concept-summary" | "cloze";
   language?: "auto" | "ru" | "en";
 }
 
@@ -44,6 +45,7 @@ export async function generateDeckWithAI(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       text,
+      image: options.image,
       count: options.count || 10,
       difficulty: options.difficulty || "intermediate",
       style: options.style || "term-definition",

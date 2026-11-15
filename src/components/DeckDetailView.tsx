@@ -17,6 +17,7 @@ import {
   Volume2,
   Search,
   Clock,
+  BarChart2,
 } from "lucide-react";
 import { db, deleteDeckCascade, type Card } from "@/lib/db";
 import { calculateDeckFSRSStats } from "@/lib/fsrs";
@@ -25,6 +26,7 @@ import { MarkdownMath } from "./MarkdownMath";
 import { CardEditorModal } from "./CardEditorModal";
 import { CreateEditDeckModal } from "./CreateEditDeckModal";
 import { AIGenerateModal } from "./AIGenerateModal";
+import { FSRSAnalyticsModal } from "./FSRSAnalyticsModal";
 import { FlashcardsMode } from "./study/FlashcardsMode";
 import { LearnMode } from "./study/LearnMode";
 import { MatchMode } from "./study/MatchMode";
@@ -45,6 +47,7 @@ export function DeckDetailView({ deckId, userId, onBack }: DeckDetailViewProps) 
   const [cardToEdit, setCardToEdit] = useState<Card | null>(null);
   const [isEditDeckModalOpen, setIsEditDeckModalOpen] = useState(false);
   const [isAIModalOpen, setIsAIModalOpen] = useState(false);
+  const [isAnalyticsOpen, setIsAnalyticsOpen] = useState(false);
 
   // Live queries via Dexie hooks (0ms Local-First reactivity)
   const deck = useLiveQuery(() => db.decks.get(deckId), [deckId]);
@@ -287,9 +290,19 @@ export function DeckDetailView({ deckId, userId, onBack }: DeckDetailViewProps) 
                 FSRS Spaced Repetition Engine Status
               </span>
             </div>
-            <span className="text-xs font-mono font-bold text-indigo-600 dark:text-indigo-400">
-              Retention Est: {fsrsStats.retentionEstimate}%
-            </span>
+            <div className="flex items-center space-x-3">
+              <span className="text-xs font-mono font-bold text-indigo-600 dark:text-indigo-400">
+                Retention Est: {fsrsStats.retentionEstimate}%
+              </span>
+              <button
+                type="button"
+                onClick={() => setIsAnalyticsOpen(true)}
+                className="flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/60 text-indigo-600 dark:text-indigo-400 text-xs font-medium border border-indigo-200 dark:border-indigo-800 transition"
+              >
+                <BarChart2 className="w-3.5 h-3.5" />
+                <span>Прогноз на 7 дней</span>
+              </button>
+            </div>
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs">
@@ -485,6 +498,14 @@ export function DeckDetailView({ deckId, userId, onBack }: DeckDetailViewProps) 
         onClose={() => setIsAIModalOpen(false)}
         userId={userId}
         targetDeckId={deck.id}
+      />
+
+      <FSRSAnalyticsModal
+        isOpen={isAnalyticsOpen}
+        onClose={() => setIsAnalyticsOpen(false)}
+        userId={userId}
+        deckId={deck.id}
+        deckTitle={deck.title}
       />
     </div>
   );

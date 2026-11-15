@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import Link from "next/link";
 import {
   X,
@@ -8,10 +8,13 @@ import {
   Loader2,
   Check,
   Plus,
+  Image as ImageIcon,
+  Trash2,
 } from "lucide-react";
 import { generateFlashcardsWithAI, type GeneratedCard } from "@/lib/ai";
 import { db, type Deck, type Card, GUEST_USER_ID } from "@/lib/db";
 import { generateId, generateShareCode } from "@/lib/utils";
+import { hasCloze, renderClozeQuestion, renderClozeAnswer } from "@/lib/cloze";
 import { MarkdownMath } from "./MarkdownMath";
 
 interface AIGenerateModalProps {
@@ -33,6 +36,10 @@ export function AIGenerateModal({
   const [deckTitle, setDeckTitle] = useState("");
   const [count, setCount] = useState(10);
   const [difficulty, setDifficulty] = useState<"beginner" | "intermediate" | "advanced">("intermediate");
+  const [style, setStyle] = useState<"term-definition" | "exam-qa" | "concept-summary" | "cloze">("term-definition");
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [imageFileName, setImageFileName] = useState<string | null>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [generatedCards, setGeneratedCards] = useState<GeneratedCard[]>([]);
@@ -40,9 +47,30 @@ export function AIGenerateModal({
 
   if (!isOpen) return null;
 
+  const handleImageUpload = (file: File) => {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setError("Пожалуйста, загрузите изображение (PNG, JPG, WebP).");
+      return;
+    }
+    setImageFileName(file.name);
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const res = e.target?.result as string;
+      if (res) {
+        setSelectedImage(res);
+        if (!deckTitle) {
+          const suggestedTitle = file.name.replace(/\.[^/.]+$/, "").replace(/[-_]/g, " ");
+          setDeckTitle(suggestedTitle);
+        }
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleGenerate = async () => {
-    if (!prompt.trim()) {
-      setError("Please enter a topic, prompt, or paste lecture notes.");
+    if (!prompt.trim() && !selectedImage) {
+      setError("Введите тему, конспект или прикрепите фото конспекта.");
       return;
     }
 
@@ -51,9 +79,11 @@ export function AIGenerateModal({
 
     try {
       const cards = await generateFlashcardsWithAI({
-        prompt: prompt.trim(),
+        prompt: prompt.trim() || "Analyze the attached image and generate flashcards.",
+        image: selectedImage || undefined,
         count,
         difficulty,
+        style,
       });
 
       setGeneratedCards(cards);
@@ -61,7 +91,10 @@ export function AIGenerateModal({
 
       if (!deckTitle) {
         // Auto-generate title from prompt snippet
-        const titleWords = prompt.trim().split(/\s+/).slice(0, 5).join(" ");
+        const titleWords = (prompt.trim() || imageFileName || "AI Generated Deck")
+          .split(/\s+/)
+          .slice(0, 5)
+          .join(" ");
         setDeckTitle(titleWords.length > 3 ? titleWords : "AI Generated Deck");
       }
     } catch (err: unknown) {
@@ -189,12 +222,81 @@ export function AIGenerateModal({
                 </Link>
               </div>
 
+              {/* Image OCR Upload */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5">
+                    <ImageIcon className="w-3.5 h-3.5 text-indigo-500" />
+                    Фото или скан конспекта (Vision OCR)
+                  </label>
+                  {selectedImage && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedImage(null);
+                        setImageFileName(null);
+                      }}
+                      className="text-[11px] text-red-500 hover:underline flex items-center gap-1"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                      Удалить фото
+                    </button>
+                  )}
+                </div>
+
+                {selectedImage ? (
+                  <div className="flex items-center gap-3 p-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/60">
+                    <img
+                      src={selectedImage}
+                      alt="OCR Preview"
+                      className="w-12 h-12 object-cover rounded-lg border border-zinc-200 dark:border-zinc-700"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold truncate text-zinc-900 dark:text-white">
+                        {imageFileName || "Фото конспекта"}
+                      </p>
+                      <p className="text-[11px] text-zinc-500">
+                        Будет распознано с помощью Gemini Multimodal OCR
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => imageInputRef.current?.click()}
+                      className="text-xs px-2.5 py-1 rounded-md border border-zinc-300 dark:border-zinc-600 hover:bg-zinc-100 dark:hover:bg-zinc-700 font-medium"
+                    >
+                      Заменить
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => imageInputRef.current?.click()}
+                    className="w-full py-2.5 px-3 border border-dashed border-zinc-300 dark:border-zinc-700 hover:border-indigo-500 rounded-xl text-xs text-zinc-500 hover:text-indigo-600 dark:hover:text-indigo-400 flex items-center justify-center gap-2 transition"
+                  >
+                    <ImageIcon className="w-4 h-4" />
+                    <span>Загрузить фото доски, формул или страницы тетради</span>
+                  </button>
+                )}
+
+                <input
+                  ref={imageInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  className="hidden"
+                  onChange={(e) => {
+                    if (e.target.files && e.target.files[0]) {
+                      handleImageUpload(e.target.files[0]);
+                    }
+                  }}
+                />
+              </div>
+
               <div>
                 <label className="block text-sm font-semibold text-zinc-800 dark:text-zinc-200 mb-1.5">
                   Topic, Notes, or Textbook Excerpt
                 </label>
                 <textarea
-                  rows={5}
+                  rows={4}
                   value={prompt}
                   onChange={(e) => setPrompt(e.target.value)}
                   placeholder="e.g. Organic Chemistry reaction mechanisms, French irregular verbs, or paste your lecture notes here..."
@@ -217,7 +319,7 @@ export function AIGenerateModal({
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1">
                     Card Count
@@ -227,10 +329,30 @@ export function AIGenerateModal({
                     onChange={(e) => setCount(parseInt(e.target.value, 10))}
                     className="w-full px-3 py-2 text-sm rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   >
-                    <option value={5}>5 Cards (Quick review)</option>
-                    <option value={10}>10 Cards (Recommended)</option>
+                    <option value={5}>5 Cards</option>
+                    <option value={10}>10 Cards</option>
                     <option value={15}>15 Cards</option>
                     <option value={20}>20 Cards</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1">
+                    Format / Style
+                  </label>
+                  <select
+                    value={style}
+                    onChange={(e) =>
+                      setStyle(
+                        e.target.value as "term-definition" | "exam-qa" | "concept-summary" | "cloze"
+                      )
+                    }
+                    className="w-full px-3 py-2 text-sm rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  >
+                    <option value="term-definition">Term — Definition</option>
+                    <option value="exam-qa">Exam Q&A</option>
+                    <option value="concept-summary">Concept Summary</option>
+                    <option value="cloze">Cloze Deletion (Пропуски)</option>
                   </select>
                 </div>
 
@@ -247,9 +369,9 @@ export function AIGenerateModal({
                     }
                     className="w-full px-3 py-2 text-sm rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   >
-                    <option value="beginner">Beginner (Fundamentals)</option>
-                    <option value="intermediate">Intermediate (Standard)</option>
-                    <option value="advanced">Advanced (Deep Dive / Nuance)</option>
+                    <option value="beginner">Beginner</option>
+                    <option value="intermediate">Intermediate</option>
+                    <option value="advanced">Advanced</option>
                   </select>
                 </div>
               </div>
@@ -288,10 +410,27 @@ export function AIGenerateModal({
                             <span className="text-xs font-semibold text-indigo-500 mr-1.5">
                               #{idx + 1}
                             </span>
-                            <MarkdownMath content={card.term || card.front || ""} />
+                            {hasCloze(card.term || card.front || "") && (
+                              <span className="mr-1.5 px-1.5 py-0.5 text-[10px] font-bold rounded bg-indigo-100 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400">
+                                Cloze
+                              </span>
+                            )}
+                            <MarkdownMath
+                              content={
+                                hasCloze(card.term || card.front || "")
+                                  ? renderClozeQuestion(card.term || card.front || "")
+                                  : (card.term || card.front || "")
+                              }
+                            />
                           </div>
                           <div className="text-xs text-zinc-600 dark:text-zinc-300 pt-1 border-t border-zinc-100 dark:border-zinc-800">
-                            <MarkdownMath content={card.definition || card.back || ""} />
+                            <MarkdownMath
+                              content={
+                                hasCloze(card.term || card.front || "")
+                                  ? `${renderClozeAnswer(card.term || card.front || "")}${card.definition ? ` — ${card.definition}` : ""}`
+                                  : (card.definition || card.back || "")
+                              }
+                            />
                           </div>
                           {card.hint && (
                             <p className="text-[11px] text-amber-600 dark:text-amber-400 italic">

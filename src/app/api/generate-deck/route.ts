@@ -6,9 +6,10 @@ export async function POST(req: Request) {
     const body = await req.json();
     const {
       text,
+      image,
       count = 10,
       difficulty = "intermediate", // "beginner" | "intermediate" | "advanced"
-      style = "term-definition", // "term-definition" | "exam-qa" | "concept-summary"
+      style = "term-definition", // "term-definition" | "exam-qa" | "concept-summary" | "cloze"
       language = "auto", // "auto" | "ru" | "en"
       userApiKey,
     } = body;
@@ -34,18 +35,42 @@ export async function POST(req: Request) {
       );
     }
 
-    if (!text || typeof text !== "string" || text.trim().length < 20) {
+    const hasImage = typeof image === "string" && image.trim().length > 0;
+    const hasText = typeof text === "string" && text.trim().length >= 10;
+
+    if (!hasText && !hasImage) {
       return NextResponse.json(
         {
           error:
-            "Текст слишком короткий для генерации карточек. Вставьте конспект, лекцию или билеты объемом не менее 20 символов.",
-          code: "TEXT_TOO_SHORT",
+            "Предоставьте текст (не менее 10 символов) или загрузите изображение/фотографию конспекта для генерации карточек.",
+          code: "MISSING_INPUT",
         },
         { status: 400 }
       );
     }
 
     const ai = new GoogleGenAI({ apiKey });
+
+    // Parse multimodal image if provided
+    let imagePart: { inlineData: { mimeType: string; data: string } } | null = null;
+    if (hasImage) {
+      const match = image.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,(.+)$/);
+      if (match) {
+        imagePart = {
+          inlineData: {
+            mimeType: match[1],
+            data: match[2],
+          },
+        };
+      } else {
+        imagePart = {
+          inlineData: {
+            mimeType: "image/jpeg",
+            data: image,
+          },
+        };
+      }
+    }
 
     // Determine style instructions
     let styleGuideline = "";
@@ -55,6 +80,9 @@ export async function POST(req: Request) {
     } else if (style === "concept-summary") {
       styleGuideline =
         "- Format: Core Concept & Deep Summary. 'term' is the fundamental concept or law, 'definition' includes key points, mechanics, and practical implications.";
+    } else if (style === "cloze") {
+      styleGuideline =
+        "- Format: Cloze Deletion (Fill in the blanks). The 'term' (front) MUST be a complete, grammatically sound sentence where the most important key term, formula, or concept is wrapped in standard Cloze deletion syntax: '{{c1::answer::hint}}' (e.g. 'Столица Франции — {{c1::Париж::город}}.' or 'Закон Ома для участка цепи: {{c1::$I = \\frac{U}{R}$::формула}}'). The 'definition' (back) should provide the explanation, translation, or full context. 'hint' should be a concise memory cue.";
     } else {
       styleGuideline =
         "- Format: Classic Flashcard (Term — Definition). 'term' is a concise concept, word, theorem, or entity. 'definition' is an accurate explanation.";
@@ -70,7 +98,7 @@ export async function POST(req: Request) {
         "All output (title, description, term, definition, hint) MUST be in English.";
     } else {
       langGuideline =
-        "Match the predominant language of the provided input text.";
+        "Match the predominant language of the provided input text or image.";
     }
 
     const systemInstruction = `
@@ -88,18 +116,30 @@ Key requirements:
 6. Provide an informative, concise deck title and a 1-sentence description.
 `;
 
-    const userPrompt = `Source Material:
+    const ocrInstruction = imagePart
+      ? `\nMULTIMODAL OCR & VISION INSTRUCTIONS:
+- An image (photo of blackboard, lecture handwritten notes, book page, slide, or diagram) is attached.
+- Transcribe and perform OCR on all readable handwritten and printed text, formulas, graphs, and diagrams in the image.
+- Extract the core pedagogical concepts, theorems, equations, definitions, or vocabulary shown.
+- Transform them into exactly ${count} high-yield flashcards.`
+      : "";
+
+    const userPrompt = `Source Material:${ocrInstruction}
 """
-${text.trim()}
+${(text || "").trim() || "Analyze the attached image and generate flashcards based on its content."}
 """
 
 Create a flashcard deck with exactly ${count} cards according to the specifications.`;
+
+    const requestContents = imagePart
+      ? [imagePart, `${systemInstruction}\n\n${userPrompt}`]
+      : `${systemInstruction}\n\n${userPrompt}`;
 
     let response;
     try {
       response = await ai.models.generateContent({
         model: "gemini-2.5-flash",
-        contents: `${systemInstruction}\n\n${userPrompt}`,
+        contents: requestContents,
         config: {
           responseMimeType: "application/json",
           responseSchema: {
@@ -145,7 +185,7 @@ Create a flashcard deck with exactly ${count} cards according to the specificati
       if (errMessage.includes("not found") || errMessage.includes("404")) {
         response = await ai.models.generateContent({
           model: "gemini-2.0-flash",
-          contents: `${systemInstruction}\n\n${userPrompt}`,
+          contents: requestContents,
           config: {
             responseMimeType: "application/json",
             responseSchema: {

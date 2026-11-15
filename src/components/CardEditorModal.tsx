@@ -245,9 +245,31 @@ export function CardEditorModal({
               {/* Front Side */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
-                    FRONT (Term / Question / $LaTeX$) *
-                  </label>
+                  <div className="flex items-center space-x-2">
+                    <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+                      FRONT (Term / Question / $LaTeX$) *
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFront((prev) => prev ? `${prev} {{c1::ответ}}` : "{{c1::пропуск}}");
+                      }}
+                      className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 transition"
+                      title="Вставить пропуск Cloze deletion"
+                    >
+                      + Cloze
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFront((prev) => prev ? `${prev} $x^2$` : "$x^2$");
+                      }}
+                      className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-200 transition"
+                      title="Вставить математическую формулу LaTeX"
+                    >
+                      + $Math$
+                    </button>
+                  </div>
                   <div className="flex items-center space-x-2">
                     <button
                       type="button"

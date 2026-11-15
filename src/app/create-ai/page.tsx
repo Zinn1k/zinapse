@@ -21,10 +21,12 @@ import {
   ChevronDown,
   ChevronUp,
   ExternalLink,
+  Image as ImageIcon,
 } from "lucide-react";
 import confetti from "canvas-confetti";
 import { db, type Deck, type Card as DbCard, GUEST_USER_ID } from "@/lib/db";
 import { generateId, generateShareCode } from "@/lib/utils";
+import { hasCloze, renderClozeQuestion, renderClozeAnswer } from "@/lib/cloze";
 import { MarkdownMath } from "@/components/MarkdownMath";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -46,12 +48,15 @@ export default function CreateWithAIPage() {
   // Input text & file
   const [sourceText, setSourceText] = useState("");
   const [fileName, setFileName] = useState<string | null>(null);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [imageFileName, setImageFileName] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
 
   // Settings
   const [cardCount, setCardCount] = useState<number>(10);
-  const [style, setStyle] = useState<"term-definition" | "exam-qa" | "concept-summary">("term-definition");
+  const [style, setStyle] = useState<"term-definition" | "exam-qa" | "concept-summary" | "cloze">("term-definition");
   const [difficulty, setDifficulty] = useState<"beginner" | "intermediate" | "advanced">("intermediate");
   const [language, setLanguage] = useState<"auto" | "ru" | "en">("auto");
 
@@ -105,23 +110,55 @@ export default function CreateWithAIPage() {
     return () => clearInterval(interval);
   }, [isLoading]);
 
-  const loadingMessages = [
-    "Gemini анализирует предоставленный конспект...",
-    "Выделение ключевых тезисов и определений...",
-    "Форматирование математических формул в LaTeX...",
-    "Формирование структурированных карточек для FSRS...",
-  ];
+  const loadingMessages = selectedImage
+    ? [
+        "Gemini Vision распознает рукописный и печатный текст конспекта (OCR)...",
+        "Извлечение ключевых формул, определений и терминов с изображения...",
+        "Форматирование математических формул в LaTeX ($...$, $$...$$)...",
+        "Синтез структурированных карточек для интервального повторения FSRS...",
+      ]
+    : [
+        "Gemini анализирует предоставленный конспект...",
+        "Выделение ключевых тезисов и определений...",
+        "Форматирование математических формул в LaTeX...",
+        "Формирование структурированных карточек для FSRS...",
+      ];
+
+  // Image upload handling for Multimodal Vision OCR
+  const handleImageUpload = (file: File) => {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setError("Пожалуйста, загрузите изображение (PNG, JPG, WebP).");
+      return;
+    }
+    setImageFileName(file.name);
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const result = e.target?.result as string;
+      if (result) {
+        setSelectedImage(result);
+        const suggestedTitle = file.name.replace(/\.[^/.]+$/, "").replace(/[-_]/g, " ");
+        if (!deckTitle) {
+          setDeckTitle(suggestedTitle);
+        }
+      }
+    };
+    reader.readAsDataURL(file);
+  };
 
   // File drop & upload handling
   const handleFileUpload = (file: File) => {
     if (!file) return;
+    if (file.type.startsWith("image/")) {
+      handleImageUpload(file);
+      return;
+    }
     setFileName(file.name);
     const reader = new FileReader();
     reader.onload = (e) => {
       const content = e.target?.result as string;
       if (content) {
         setSourceText(content);
-        // Suggest title from file name without extension
         const suggestedTitle = file.name.replace(/\.[^/.]+$/, "").replace(/[-_]/g, " ");
         if (!deckTitle) {
           setDeckTitle(suggestedTitle);
@@ -168,8 +205,8 @@ Burn the midnight oil — to work or study late into the night. Example: She bur
 
   // Trigger AI generation
   const handleGenerate = async () => {
-    if (!sourceText.trim() || sourceText.trim().length < 20) {
-      setError("Пожалуйста, вставьте текст объемом не менее 20 символов.");
+    if ((!sourceText.trim() || sourceText.trim().length < 10) && !selectedImage) {
+      setError("Пожалуйста, вставьте текст (не менее 10 символов) или прикрепите фото конспекта.");
       return;
     }
 
@@ -181,7 +218,8 @@ Burn the midnight oil — to work or study late into the night. Example: She bur
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          text: sourceText.trim(),
+          text: sourceText.trim() || undefined,
+          image: selectedImage || undefined,
           count: cardCount,
           style,
           difficulty,
@@ -497,6 +535,80 @@ Burn the midnight oil — to work or study late into the night. Example: She bur
                   </p>
                 </div>
 
+                {/* Multimodal Vision OCR Image Upload */}
+                <div className="space-y-2 pt-1">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
+                      <ImageIcon className="w-3.5 h-3.5 text-primary" />
+                      Фото/скан конспекта, доски или учебника (Vision OCR)
+                    </label>
+                    {selectedImage && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setSelectedImage(null);
+                          setImageFileName(null);
+                        }}
+                        className="h-6 text-xs text-destructive hover:bg-destructive/10 px-1.5"
+                      >
+                        <Trash2 className="w-3 h-3 mr-1" />
+                        Удалить фото
+                      </Button>
+                    )}
+                  </div>
+
+                  {selectedImage ? (
+                    <div className="relative border rounded-xl p-3 bg-muted/20 flex items-center gap-3">
+                      <img
+                        src={selectedImage}
+                        alt="Конспект OCR"
+                        className="w-16 h-16 object-cover rounded-lg border shadow-xs"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs font-semibold truncate text-foreground">
+                          {imageFileName || "Изображение для распознавания"}
+                        </div>
+                        <p className="text-[11px] text-muted-foreground mt-0.5">
+                          Gemini Vision распознает рукописный текст, формулы и графики
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => imageInputRef.current?.click()}
+                        className="text-xs h-8"
+                      >
+                        Заменить
+                      </Button>
+                    </div>
+                  ) : (
+                    <div
+                      onClick={() => imageInputRef.current?.click()}
+                      className="border-2 border-dashed border-border hover:border-primary/50 hover:bg-muted/30 rounded-xl p-3 text-center cursor-pointer transition flex items-center justify-center gap-2"
+                    >
+                      <ImageIcon className="w-4 h-4 text-primary" />
+                      <span className="text-xs font-medium">
+                        Прикрепить фото рукописного конспекта, формул или страницы (OCR)
+                      </span>
+                    </div>
+                  )}
+
+                  <input
+                    ref={imageInputRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    className="hidden"
+                    onChange={(e) => {
+                      if (e.target.files && e.target.files[0]) {
+                        handleImageUpload(e.target.files[0]);
+                      }
+                    }}
+                  />
+                </div>
+
                 {/* Textarea for raw text */}
                 <div className="space-y-1.5">
                   <Textarea
@@ -542,7 +654,7 @@ Burn the midnight oil — to work or study late into the night. Example: She bur
                   <label className="text-xs font-semibold text-muted-foreground block mb-1.5">
                     Формат карточек
                   </label>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
                     {[
                       {
                         key: "term-definition" as const,
@@ -558,6 +670,11 @@ Burn the midnight oil — to work or study late into the night. Example: She bur
                         key: "concept-summary" as const,
                         label: "Понятие — Разбор сути",
                         desc: "Углубленное понимание с деталями",
+                      },
+                      {
+                        key: "cloze" as const,
+                        label: "Текст с пропусками (Cloze)",
+                        desc: "Вставить пропущенное слово/формулу",
                       },
                     ].map((opt) => (
                       <button
@@ -804,16 +921,23 @@ Burn the midnight oil — to work or study late into the night. Example: She bur
                       /* Formatted LaTeX / Markdown View */
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
                         <div className="p-3 rounded-lg bg-muted/40 border text-sm">
-                          <span className="text-[10px] font-bold text-muted-foreground uppercase block mb-1">
-                            Термин / Вопрос:
-                          </span>
-                          <MarkdownMath content={card.term || "—"} />
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-[10px] font-bold text-muted-foreground uppercase">
+                              {hasCloze(card.term) ? "Лицевая сторона (Вопрос с пропуском):" : "Термин / Вопрос:"}
+                            </span>
+                            {hasCloze(card.term) && (
+                              <Badge variant="secondary" className="text-[9px] h-4 px-1 text-indigo-600 bg-indigo-50 dark:bg-indigo-950/60">
+                                Cloze
+                              </Badge>
+                            )}
+                          </div>
+                          <MarkdownMath content={hasCloze(card.term) ? renderClozeQuestion(card.term) : (card.term || "—")} />
                         </div>
                         <div className="p-3 rounded-lg bg-muted/40 border text-sm">
                           <span className="text-[10px] font-bold text-muted-foreground uppercase block mb-1">
-                            Определение / Ответ:
+                            {hasCloze(card.term) ? "Обратная сторона (Ответ):" : "Определение / Ответ:"}
                           </span>
-                          <MarkdownMath content={card.definition || "—"} />
+                          <MarkdownMath content={hasCloze(card.term) ? `${renderClozeAnswer(card.term)}${card.definition ? `\n\n_${card.definition}_` : ""}` : (card.definition || "—")} />
                         </div>
                       </div>
                     ) : (

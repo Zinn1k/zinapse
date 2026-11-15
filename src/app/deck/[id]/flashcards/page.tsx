@@ -18,6 +18,7 @@ import {
   Sparkles,
   ChevronLeft,
   ChevronRight,
+  ArrowLeftRight,
 } from "lucide-react";
 import { db, type Card, type Deck, GUEST_USER_ID } from "@/lib/db";
 import {
@@ -28,6 +29,7 @@ import {
   type IntervalPreview,
 } from "@/lib/fsrs";
 import { speakText } from "@/lib/speech";
+import { hasCloze, renderClozeQuestion, renderClozeAnswer } from "@/lib/cloze";
 import { MarkdownMath } from "@/components/MarkdownMath";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -50,6 +52,7 @@ export default function FlashcardsPage({
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
   const [mode, setMode] = useState<StudyModeType>("fsrs");
+  const [isReversed, setIsReversed] = useState(false);
   const [intervals, setIntervals] = useState<IntervalPreview[]>([]);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showHint, setShowHint] = useState(false);
@@ -169,9 +172,13 @@ export default function FlashcardsPage({
   const handleSpeak = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!currentCard) return;
-    const textToSpeak = isFlipped
+    const frontText = isReversed
       ? currentCard.definition || currentCard.back || ""
       : currentCard.term || currentCard.front || "";
+    const backText = isReversed
+      ? currentCard.term || currentCard.front || ""
+      : currentCard.definition || currentCard.back || "";
+    const textToSpeak = isFlipped ? backText : frontText;
     speakText(textToSpeak);
   };
 
@@ -297,6 +304,24 @@ export default function FlashcardsPage({
 
           <div className="flex items-center space-x-2">
             <button
+              onClick={() => {
+                setIsReversed(!isReversed);
+                setIsFlipped(false);
+              }}
+              className={`p-2 rounded-lg border transition ${
+                isReversed
+                  ? "bg-indigo-50 border-indigo-300 dark:bg-indigo-950/60 dark:border-indigo-800 text-indigo-600 dark:text-indigo-400 font-semibold"
+                  : "border-zinc-200 dark:border-zinc-800 text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-900"
+              }`}
+              title={
+                isReversed
+                  ? "Обратный режим включен (Определение → Термин)"
+                  : "Включить обратный режим (Определение → Термин)"
+              }
+            >
+              <ArrowLeftRight className="w-4 h-4" />
+            </button>
+            <button
               onClick={handleShuffle}
               className="p-2 rounded-lg border border-zinc-200 dark:border-zinc-800 text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-900 transition"
               title="Перемешать карточки"
@@ -417,102 +442,130 @@ export default function FlashcardsPage({
                 animate={{ rotateY: isFlipped ? 180 : 0 }}
                 transition={{ duration: 0.45, ease: "easeInOut" }}
               >
-                {/* FRONT SIDE (Термин) */}
-                <div className="absolute inset-0 backface-hidden w-full h-full p-8 sm:p-12 rounded-3xl bg-white dark:bg-zinc-900 border-2 border-zinc-200 dark:border-zinc-800 flex flex-col justify-between overflow-y-auto">
-                  <div className="flex items-center justify-between text-xs text-zinc-400">
-                    <span className="uppercase tracking-widest font-bold text-indigo-500">
-                      Термин
-                    </span>
-                    <div className="flex items-center space-x-2">
-                      {currentCard.hint && (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setShowHint(!showHint);
-                          }}
-                          className="p-1 text-amber-500 hover:text-amber-600"
-                          title="Показать подсказку"
-                        >
-                          <HelpCircle className="w-4 h-4" />
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        onClick={handleSpeak}
-                        className="p-1 text-zinc-400 hover:text-indigo-500 transition"
-                        title="Озвучить (TTS)"
-                      >
-                        <Volume2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
+                {/* FRONT SIDE */}
+                {(() => {
+                  const rawFront = isReversed
+                    ? currentCard.definition || currentCard.back || ""
+                    : currentCard.term || currentCard.front || "";
+                  const rawBack = isReversed
+                    ? currentCard.term || currentCard.front || ""
+                    : currentCard.definition || currentCard.back || "";
 
-                  <div className="my-auto py-4 text-center">
-                    <div className="text-xl sm:text-2xl font-semibold text-zinc-900 dark:text-white leading-relaxed">
-                      <MarkdownMath content={currentCard.term || currentCard.front || ""} />
-                    </div>
+                  const isClozeCard = hasCloze(rawFront);
+                  const displayFront = isClozeCard ? renderClozeQuestion(rawFront) : rawFront;
+                  const displayBack = isClozeCard
+                    ? renderClozeAnswer(rawFront) + (rawBack && rawBack !== rawFront ? `\n\n---\n\n${rawBack}` : "")
+                    : rawBack;
 
-                    {(currentCard.imageData || currentCard.frontImage) && (
-                      <img
-                        src={currentCard.imageData || currentCard.frontImage}
-                        alt="Иллюстрация термина"
-                        className="mt-4 max-h-48 mx-auto rounded-xl object-contain shadow-sm border border-zinc-100 dark:border-zinc-800"
-                      />
-                    )}
+                  const frontLabel = isReversed
+                    ? "Определение (Обратный режим)"
+                    : isClozeCard
+                    ? "Текст с пропуском (Cloze)"
+                    : "Термин";
+                  const backLabel = isReversed
+                    ? "Термин (Обратный режим)"
+                    : isClozeCard
+                    ? "Ответ (Cloze)"
+                    : "Определение";
 
-                    {showHint && currentCard.hint && (
-                      <motion.div
-                        initial={{ opacity: 0, y: 5 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="mt-4 p-2.5 text-xs rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 inline-block border border-amber-200 dark:border-amber-900"
-                      >
-                        Подсказка: {currentCard.hint}
-                      </motion.div>
-                    )}
-                  </div>
+                  return (
+                    <>
+                      <div className="absolute inset-0 backface-hidden w-full h-full p-8 sm:p-12 rounded-3xl bg-white dark:bg-zinc-900 border-2 border-zinc-200 dark:border-zinc-800 flex flex-col justify-between overflow-y-auto">
+                        <div className="flex items-center justify-between text-xs text-zinc-400">
+                          <span className="uppercase tracking-widest font-bold text-indigo-500">
+                            {frontLabel}
+                          </span>
+                          <div className="flex items-center space-x-2">
+                            {currentCard.hint && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setShowHint(!showHint);
+                                }}
+                                className="p-1 text-amber-500 hover:text-amber-600"
+                                title="Показать подсказку"
+                              >
+                                <HelpCircle className="w-4 h-4" />
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={handleSpeak}
+                              className="p-1 text-zinc-400 hover:text-indigo-500 transition"
+                              title="Озвучить (TTS)"
+                            >
+                              <Volume2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
 
-                  <div className="text-center text-xs text-zinc-400">
-                    Нажмите <kbd className="px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-[10px] font-mono">Пробел</kbd> или кликните для переворота
-                  </div>
-                </div>
+                        <div className="my-auto py-4 text-center">
+                          <div className="text-xl sm:text-2xl font-semibold text-zinc-900 dark:text-white leading-relaxed">
+                            <MarkdownMath content={displayFront} />
+                          </div>
 
-                {/* BACK SIDE (Определение) */}
-                <div className="absolute inset-0 backface-hidden rotate-y-180 w-full h-full p-8 sm:p-12 rounded-3xl bg-white dark:bg-zinc-900 border-2 border-indigo-500/40 dark:border-indigo-500/30 flex flex-col justify-between overflow-y-auto">
-                  <div className="flex items-center justify-between text-xs text-zinc-400">
-                    <span className="uppercase tracking-widest font-bold text-emerald-500">
-                      Определение
-                    </span>
-                    <button
-                      type="button"
-                      onClick={handleSpeak}
-                      className="p-1 text-zinc-400 hover:text-indigo-500 transition"
-                      title="Озвучить (TTS)"
-                    >
-                      <Volume2 className="w-4 h-4" />
-                    </button>
-                  </div>
+                          {(currentCard.imageData || currentCard.frontImage) && (
+                            <img
+                              src={currentCard.imageData || currentCard.frontImage}
+                              alt="Иллюстрация термина"
+                              className="mt-4 max-h-48 mx-auto rounded-xl object-contain shadow-sm border border-zinc-100 dark:border-zinc-800"
+                            />
+                          )}
 
-                  <div className="my-auto py-4 text-center">
-                    <div className="text-lg sm:text-xl text-zinc-800 dark:text-zinc-100 leading-relaxed">
-                      <MarkdownMath
-                        content={currentCard.definition || currentCard.back || ""}
-                      />
-                    </div>
+                          {showHint && currentCard.hint && (
+                            <motion.div
+                              initial={{ opacity: 0, y: 5 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              className="mt-4 p-2.5 text-xs rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 inline-block border border-amber-200 dark:border-amber-900"
+                            >
+                              Подсказка: {currentCard.hint}
+                            </motion.div>
+                          )}
+                        </div>
 
-                    {currentCard.backImage && (
-                      <img
-                        src={currentCard.backImage}
-                        alt="Иллюстрация определения"
-                        className="mt-4 max-h-48 mx-auto rounded-xl object-contain shadow-sm border border-zinc-100 dark:border-zinc-800"
-                      />
-                    )}
-                  </div>
+                        <div className="text-center text-xs text-zinc-400">
+                          Нажмите <kbd className="px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-[10px] font-mono">Пробел</kbd> или кликните для переворота
+                        </div>
+                      </div>
 
-                  <div className="text-center text-xs text-zinc-400">
-                    Оцените карточку внизу для перехода дальше
-                  </div>
-                </div>
+                      {/* BACK SIDE */}
+                      <div className="absolute inset-0 backface-hidden rotate-y-180 w-full h-full p-8 sm:p-12 rounded-3xl bg-white dark:bg-zinc-900 border-2 border-indigo-500/40 dark:border-indigo-500/30 flex flex-col justify-between overflow-y-auto">
+                        <div className="flex items-center justify-between text-xs text-zinc-400">
+                          <span className="uppercase tracking-widest font-bold text-emerald-500">
+                            {backLabel}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={handleSpeak}
+                            className="p-1 text-zinc-400 hover:text-indigo-500 transition"
+                            title="Озвучить (TTS)"
+                          >
+                            <Volume2 className="w-4 h-4" />
+                          </button>
+                        </div>
+
+                        <div className="my-auto py-4 text-center">
+                          <div className="text-lg sm:text-xl text-zinc-800 dark:text-zinc-100 leading-relaxed">
+                            <MarkdownMath content={displayBack} />
+                          </div>
+
+                          {currentCard.backImage && (
+                            <img
+                              src={currentCard.backImage}
+                              alt="Иллюстрация определения"
+                              className="mt-4 max-h-48 mx-auto rounded-xl object-contain shadow-sm border border-zinc-100 dark:border-zinc-800"
+                            />
+                          )}
+                        </div>
+
+                        <div className="text-center text-xs text-zinc-400">
+                          Оцените карточку внизу для перехода дальше
+                        </div>
+                      </div>
+                    </>
+                  );
+                })()}
               </motion.div>
             </div>
 
