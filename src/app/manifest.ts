@@ -2,8 +2,8 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Memorize - Free Quizlet & FSRS Flashcards",
-    short_name: "Memorize",
+    name: "Zinapse - Free Quizlet & FSRS Flashcards",
+    short_name: "Zinapse",
     description:
       "Local-first flashcard app with modern FSRS spaced repetition, KaTeX math formulas, and Gemini AI card generation.",
     start_url: "/",

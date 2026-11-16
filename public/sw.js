@@ -1,4 +1,4 @@
-const CACHE_NAME = "memorize-pwa-v1";
+const CACHE_NAME = "zinapse-pwa-v1";
 const STATIC_ASSETS = [
   "/",
   "/manifest.webmanifest",

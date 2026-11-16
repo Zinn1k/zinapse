@@ -30,6 +30,7 @@ describe("FSRS Analytics & 7-Day Forecast Computation", () => {
     const cards = [{ id: "c1" }, { id: "c2" }, { id: "c3" }, { id: "c4" }];
     const states: FSRSStateRecord[] = [
       {
+        id: "fs1",
         cardId: "c1",
         deckId: "d1",
         userId: "u1",
@@ -44,6 +45,7 @@ describe("FSRS Analytics & 7-Day Forecast Computation", () => {
         last_review: startOfDay,
       },
       {
+        id: "fs2",
         cardId: "c2",
         deckId: "d1",
         userId: "u1",

@@ -10,12 +10,12 @@ import {
   RefreshCw,
   Sun,
   Moon,
-  BookOpen,
   LogOut,
   LogIn,
   WifiOff,
   CheckCircle,
 } from "lucide-react";
+import { ZinapseLogo } from "@/components/ZinapseLogo";
 import {
   subscribeToAuthChanges,
   signInWithGoogle,
@@ -114,13 +114,13 @@ export function AppHeader({
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
         {/* Brand */}
         <Link href="/" className="flex items-center space-x-3 group">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center text-white shadow-md shadow-indigo-500/20 group-hover:scale-105 transition-transform">
-            <BookOpen className="w-5 h-5" />
+          <div className="w-10 h-10 group-hover:scale-105 transition-transform">
+            <ZinapseLogo size={40} className="w-10 h-10 shadow-md shadow-indigo-500/25 rounded-2xl" />
           </div>
           <div>
             <div className="flex items-center space-x-1.5">
-              <span className="font-bold text-lg tracking-tight text-zinc-900 dark:text-white">
-                Memorize
+              <span className="font-extrabold text-xl tracking-tight bg-gradient-to-r from-zinc-950 via-indigo-950 to-zinc-800 dark:from-white dark:via-indigo-200 dark:to-zinc-100 bg-clip-text text-transparent">
+                Zinapse
               </span>
               <span className="px-1.5 py-0.5 text-[10px] font-semibold bg-indigo-100 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 rounded border border-indigo-200 dark:border-indigo-800">
                 FSRS PWA

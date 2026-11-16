@@ -1,13 +1,124 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
-    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#4f46e5" />
-      <stop offset="100%" stop-color="#7c3aed" />
+    <!-- Background Gradient -->
+    <linearGradient id="zinapse-bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e1b4b" />
+      <stop offset="35%" stop-color="#312e81" />
+      <stop offset="70%" stop-color="#4338ca" />
+      <stop offset="100%" stop-color="#6366f1" />
     </linearGradient>
+
+    <!-- Border highlight -->
+    <linearGradient id="zinapse-border" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.4" />
+      <stop offset="50%" stop-color="#a5b4fc" stop-opacity="0.1" />
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0.25" />
+    </linearGradient>
+
+    <!-- Card Faint Gradient -->
+    <linearGradient id="zinapse-card-bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.08" />
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0.02" />
+    </linearGradient>
+
+    <!-- Upper Neural Axon Gradient -->
+    <linearGradient id="upper-axon" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" />
+      <stop offset="60%" stop-color="#e0e7ff" />
+      <stop offset="100%" stop-color="#38bdf8" />
+    </linearGradient>
+
+    <!-- Lower Neural Axon Gradient -->
+    <linearGradient id="lower-axon" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8" />
+      <stop offset="40%" stop-color="#e0e7ff" />
+      <stop offset="100%" stop-color="#ffffff" />
+    </linearGradient>
+
+    <!-- Spark Glow Filter -->
+    <filter id="spark-glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="6" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+
+    <!-- Synaptic Cleft Radial Ambient Glow -->
+    <radialGradient id="cleft-ambient" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.6" />
+      <stop offset="50%" stop-color="#6366f1" stop-opacity="0.25" />
+      <stop offset="100%" stop-color="#4338ca" stop-opacity="0" />
+    </radialGradient>
   </defs>
-  <rect width="512" height="512" rx="128" fill="url(#grad)" />
-  <path d="M144 128h224a32 32 0 0 1 32 32v224a32 32 0 0 1-32 32H144a32 32 0 0 1-32-32V160a32 32 0 0 1 32-32z" fill="#ffffff" opacity="0.15" />
-  <path d="M176 160h160a24 24 0 0 1 24 24v160a24 24 0 0 1-24 24H176a24 24 0 0 1-24-24V184a24 24 0 0 1 24-24z" fill="#ffffff" opacity="0.25" />
-  <path d="M208 192h96a16 16 0 0 1 16 16v96a16 16 0 0 1-16 16h-96a16 16 0 0 1-16-16v-96a16 16 0 0 1 16-16z" fill="#ffffff" />
-  <path d="M240 224l32 32-32 32" stroke="#4f46e5" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+
+  <!-- Squircle Base Canvas (App Icon) -->
+  <rect width="512" height="512" rx="128" fill="url(#zinapse-bg)" />
+  <rect x="6" y="6" width="500" height="500" rx="122" fill="none" stroke="url(#zinapse-border)" stroke-width="3" />
+
+  <!-- Thematic Metaphor 1: Layered Flashcards in Background (Quizlet heritage) -->
+  <g id="flashcard-layers">
+    <!-- Back card (tilted -6 deg) -->
+    <rect x="136" y="126" width="240" height="260" rx="32" fill="url(#zinapse-card-bg)" stroke="#ffffff" stroke-width="2.5" stroke-opacity="0.15" transform="rotate(-6 256 256)" />
+    <!-- Front card (tilted +4 deg) -->
+    <rect x="136" y="126" width="240" height="260" rx="32" fill="url(#zinapse-card-bg)" stroke="#ffffff" stroke-width="3" stroke-opacity="0.22" transform="rotate(4 256 256)" />
+  </g>
+
+  <!-- Thematic Metaphor 2: Synaptic Cleft Ambient Glow -->
+  <circle cx="256" cy="256" r="90" fill="url(#cleft-ambient)" />
+
+  <!-- Thematic Metaphor 3: The "Z" Synaptic Neurons Pathway -->
+  <!-- Upper Axon / Dendrite Branch -->
+  <path
+    d="M 140 150 L 372 150 C 388 150 395 162 386 172 L 274 239"
+    fill="none"
+    stroke="url(#upper-axon)"
+    stroke-width="26"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+
+  <!-- Lower Axon / Dendrite Branch -->
+  <path
+    d="M 238 273 L 126 340 C 117 350 124 362 140 362 L 372 362"
+    fill="none"
+    stroke="url(#lower-axon)"
+    stroke-width="26"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+
+  <!-- Synaptic Terminals (Presynaptic & Postsynaptic Boutons) -->
+  <!-- Upper Presynaptic Terminal Bouton -->
+  <circle cx="274" cy="239" r="17" fill="#ffffff" />
+  <circle cx="274" cy="239" r="9" fill="#0284c7" />
+
+  <!-- Lower Postsynaptic Receptor Bouton -->
+  <circle cx="238" cy="273" r="17" fill="#ffffff" />
+  <circle cx="238" cy="273" r="9" fill="#0284c7" />
+
+  <!-- Neuron Somata (Outer Corner Junction Nodes) -->
+  <!-- Top-Left Soma Node -->
+  <circle cx="140" cy="150" r="26" fill="#818cf8" opacity="0.3" filter="url(#spark-glow)" />
+  <circle cx="140" cy="150" r="15" fill="#ffffff" />
+  <circle cx="140" cy="150" r="8" fill="#4f46e5" />
+
+  <!-- Bottom-Right Soma Node -->
+  <circle cx="372" cy="362" r="26" fill="#a78bfa" opacity="0.3" filter="url(#spark-glow)" />
+  <circle cx="372" cy="362" r="15" fill="#ffffff" />
+  <circle cx="372" cy="362" r="8" fill="#7c3aed" />
+
+  <!-- Synaptic Cleft Action: Neurotransmitter vesicles & Electric Spark of Insight -->
+  <g id="synaptic-spark" filter="url(#spark-glow)">
+    <!-- Central 4-point Diamond Spark -->
+    <path
+      d="M 256 226 Q 256 256 226 256 Q 256 256 256 286 Q 256 256 286 256 Q 256 256 256 226 Z"
+      fill="#ffffff"
+    />
+    <!-- Micro Neurotransmitter vesicles crossing the cleft -->
+    <circle cx="246" cy="246" r="5" fill="#38bdf8" />
+    <circle cx="266" cy="266" r="5" fill="#38bdf8" />
+    <circle cx="264" cy="244" r="3.5" fill="#ffffff" />
+    <circle cx="248" cy="268" r="3.5" fill="#ffffff" />
+  </g>
 </svg>

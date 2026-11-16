@@ -109,7 +109,7 @@ export function SettingsModal({ isOpen, onClose, userId }: SettingsModalProps) {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `memorize-backup-${new Date().toISOString().split("T")[0]}.json`;
+      a.download = `zinapse-backup-${new Date().toISOString().split("T")[0]}.json`;
       a.click();
       URL.revokeObjectURL(url);
     } catch (err: unknown) {

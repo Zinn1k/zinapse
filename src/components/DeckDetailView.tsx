@@ -147,7 +147,7 @@ export function DeckDetailView({ deckId, userId, onBack }: DeckDetailViewProps) 
       deck,
       cards: cardList,
       exportedAt: new Date().toISOString(),
-      app: "Free Quizlet Analog (Memorize)",
+      app: "Zinapse",
     };
     const blob = new Blob([JSON.stringify(exportData, null, 2)], {
       type: "application/json",

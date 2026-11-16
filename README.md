@@ -1,4 +1,4 @@
-# Memorize — Free Quizlet Analog (Local-First PWA)
+# Zinapse — Free Quizlet Analog (Local-First PWA)
 
 Современный, бесплатный и полностью автономный Local-First аналог Quizlet для эффективного запоминания информации на базе научно обоснованного алгоритма интервальных повторений **FSRS** (*Free Spaced Repetition Scheduler*), искусственного интеллекта **Google Gemini 2.5 Flash** и облачной синхронизации **Firebase** (бесплатный тариф Spark Plan).
 

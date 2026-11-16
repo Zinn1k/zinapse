@@ -14,14 +14,14 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Memorize - Free Quizlet & FSRS Flashcards",
+  title: "Zinapse - Free Quizlet & FSRS Flashcards",
   description:
     "Local-first flashcard app with modern FSRS spaced repetition, KaTeX math formulas, and Gemini AI card generation.",
-  applicationName: "Memorize",
+  applicationName: "Zinapse",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "Memorize",
+    title: "Zinapse",
   },
   icons: {
     icon: "/icons/icon.svg",
