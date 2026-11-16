@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Zinapse</string>
+    <string name="title_activity_main">Zinapse</string>
+    <string name="package_name">com.zinapse.app</string>
+    <string name="custom_url_scheme">com.zinapse.app</string>
+</resources>

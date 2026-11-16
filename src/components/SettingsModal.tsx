@@ -21,6 +21,7 @@ import {
 } from "@/lib/db";
 import { getAvailableVoices, speakText } from "@/lib/speech";
 import { isFirebaseConfigured } from "@/lib/firebase";
+import { checkForAppUpdates, APP_CURRENT_VERSION } from "@/lib/updater";
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -36,6 +37,8 @@ export function SettingsModal({ isOpen, onClose, userId }: SettingsModalProps) {
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [stats, setStats] = useState({ decks: 0, cards: 0, fsrs: 0 });
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [updateStatus, setUpdateStatus] = useState<string | null>(null);
+  const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -139,6 +142,26 @@ export function SettingsModal({ isOpen, onClose, userId }: SettingsModalProps) {
     };
     reader.readAsText(file);
     e.target.value = "";
+  };
+
+  const handleCheckUpdatesManually = async () => {
+    setIsCheckingUpdate(true);
+    setUpdateStatus("Проверка обновлений...");
+    try {
+      const info = await checkForAppUpdates();
+      if (info && info.hasUpdate) {
+        setUpdateStatus(`Доступна новая версия v${info.latestVersion}! Скачивание начнётся при клике.`);
+        if (confirm(`Найдена новая версия v${info.latestVersion}!\n\nОткрыть страницу релиза и скачать APK?`)) {
+          window.open(info.downloadUrl, "_blank");
+        }
+      } else {
+        setUpdateStatus(`У вас установлена актуальная версия Zinapse (v${APP_CURRENT_VERSION}).`);
+      }
+    } catch {
+      setUpdateStatus("Не удалось проверить обновления. Проверьте интернет-соединение.");
+    } finally {
+      setIsCheckingUpdate(false);
+    }
   };
 
   return (
@@ -327,6 +350,35 @@ export function SettingsModal({ isOpen, onClose, userId }: SettingsModalProps) {
                 </div>
               )}
             </div>
+          </div>
+
+          <hr className="border-zinc-200 dark:border-zinc-800" />
+
+          {/* App Version & Updates */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 block">
+                  Версия приложения
+                </span>
+                <span className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                  Zinapse v{APP_CURRENT_VERSION} (Android / Web)
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={handleCheckUpdatesManually}
+                disabled={isCheckingUpdate}
+                className="text-xs px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-800 dark:text-zinc-200 font-medium transition disabled:opacity-50"
+              >
+                {isCheckingUpdate ? "Проверка..." : "Проверить обновления"}
+              </button>
+            </div>
+            {updateStatus && (
+              <p className="text-xs text-indigo-600 dark:text-indigo-400 font-medium pt-1">
+                {updateStatus}
+              </p>
+            )}
           </div>
         </div>
 

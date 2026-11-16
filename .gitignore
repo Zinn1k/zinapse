@@ -42,3 +42,13 @@ next-env.d.ts
 
 .vercel
 .env*
+
+
+# Android
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/.idea/
+*.apk
+*.aab
