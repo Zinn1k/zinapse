@@ -41,62 +41,40 @@ jobs:
           distribution: 'temurin'
           java-version: '21'
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install Android 36 SDK & Build Tools
+      - name: Configure Android SDK & Licenses
         run: |
-          yes | sdkmanager --licenses || true
-          sdkmanager "platforms;android-36" "build-tools;36.0.0"
-
-      - name: Cache Gradle packages
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-
+          echo "Using Android SDK at: $ANDROID_HOME"
+          echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> $GITHUB_PATH
+          echo "$ANDROID_HOME/platform-tools" >> $GITHUB_PATH
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-35" "build-tools;35.0.0" || true
 
       - name: Install Node dependencies
         run: npm ci --legacy-peer-deps
 
       - name: Build Next.js Web App
         run: npm run build
-        env:
-          NEXT_PUBLIC_FIREBASE_API_KEY: ${{ secrets.NEXT_PUBLIC_FIREBASE_API_KEY }}
-          NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: ${{ secrets.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN }}
-          NEXT_PUBLIC_FIREBASE_PROJECT_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_PROJECT_ID }}
-          NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: ${{ secrets.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET }}
-          NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID }}
-          NEXT_PUBLIC_FIREBASE_APP_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_APP_ID }}
 
       - name: Sync Capacitor Android
         run: npx cap sync android
 
-      - name: Make Gradle executable
-        run: chmod +x ./android/gradlew
-
-      - name: Build Android APK
+      - name: Build Android APK with Gradle
         run: |
           cd android
-          if [ "${{ github.event.inputs.build_type }}" = "release" ]; then
-            ./gradlew assembleRelease --stacktrace
-            cd ..
-            cp android/app/build/outputs/apk/release/app-release-unsigned.apk zinapse-release.apk
-          else
-            ./gradlew assembleDebug --stacktrace
-            cd ..
-            cp android/app/build/outputs/apk/debug/app-debug.apk zinapse-debug.apk
-          fi
+          chmod +x ./gradlew
+          ./gradlew assembleDebug --no-daemon --stacktrace
+          cd ..
+          mkdir -p output_apk
+          find android/app/build/outputs/apk -name "*.apk" -exec cp {} output_apk/zinapse-debug.apk \;
+          cp output_apk/zinapse-debug.apk ./zinapse-debug.apk || true
 
       - name: Upload APK as Workflow Artifact
         uses: actions/upload-artifact@v4
         with:
           name: zinapse-android-apk
           path: |
-            zinapse-*.apk
+            zinapse-debug.apk
+            output_apk/*.apk
             android/app/build/outputs/apk/**/*.apk
           retention-days: 14
 
@@ -105,7 +83,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            zinapse-*.apk
+            zinapse-debug.apk
+            output_apk/*.apk
           name: Zinapse ${{ github.ref_name }}
           generate_release_notes: true
           draft: false
