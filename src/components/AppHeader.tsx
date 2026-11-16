@@ -127,7 +127,7 @@ export function AppHeader({
               </span>
             </div>
             <p className="text-xs text-zinc-500 dark:text-zinc-400 hidden sm:block">
-              Free Quizlet Analog • Local-First
+              Бесплатный аналог Quizlet • Local-First
             </p>
           </div>
         </Link>
@@ -138,10 +138,10 @@ export function AppHeader({
           <button
             onClick={onOpenAIGenerate}
             className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white text-sm font-medium shadow-sm transition-all hover:shadow hover:shadow-indigo-500/25 active:scale-95"
-            title="Generate flashcards with Gemini AI"
+            title="Сгенерировать карточки с помощью Gemini AI"
           >
             <Sparkles className="w-4 h-4 text-amber-300 animate-pulse" />
-            <span className="hidden sm:inline">AI Deck</span>
+            <span className="hidden sm:inline">AI Колода</span>
           </button>
 
           {/* Sync status indicator */}
@@ -196,14 +196,14 @@ export function AppHeader({
             <div className="flex items-center space-x-2 pl-1">
               <div
                 className="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/60 border border-indigo-300 dark:border-indigo-700 flex items-center justify-center text-xs font-bold text-indigo-700 dark:text-indigo-300"
-                title={user.email || user.displayName || "Signed in"}
+                title={user.email || user.displayName || "Выполнен вход"}
               >
                 {user.displayName ? user.displayName[0].toUpperCase() : "U"}
               </div>
               <button
                 onClick={handleSignOut}
                 className="p-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-900 text-zinc-500 hover:text-red-500 transition"
-                title="Sign out"
+                title="Выйти"
               >
                 <LogOut className="w-4 h-4" />
               </button>
@@ -214,7 +214,7 @@ export function AppHeader({
               className="flex items-center space-x-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-800 dark:text-zinc-200 transition"
             >
               <LogIn className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Sign In</span>
+              <span className="hidden sm:inline">Войти</span>
             </button>
           ) : null}
 
@@ -222,7 +222,7 @@ export function AppHeader({
           <button
             onClick={toggleTheme}
             className="p-2 rounded-lg text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-900 transition"
-            title={isDark ? "Switch to light mode" : "Switch to dark mode"}
+            title={isDark ? "Переключить на светлую тему" : "Переключить на тёмную тему"}
           >
             {isDark ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-zinc-600" />}
           </button>
@@ -231,7 +231,7 @@ export function AppHeader({
           <button
             onClick={onOpenSettings}
             className="p-2 rounded-lg text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-900 transition"
-            title="Settings & FSRS Parameters"
+            title="Настройки и параметры FSRS"
           >
             <Settings className="w-4 h-4" />
           </button>

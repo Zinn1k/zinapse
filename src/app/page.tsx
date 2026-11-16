@@ -95,17 +95,17 @@ export default function Home() {
                   <Clock className="w-3.5 h-3.5 text-amber-300" />
                   <span>
                     {(dueStatesCount ?? 0) > 0
-                      ? `${dueStatesCount} flashcards due for FSRS review today`
-                      : "All caught up! Zero cards overdue"}
+                      ? `${dueStatesCount} карточек на повторение сегодня (FSRS)`
+                      : "Всё повторено! Нет карточек на повторение"}
                   </span>
                 </div>
 
                 <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight">
-                  Master Anything with Spaced Repetition.
+                  Освойте любые знания с интервальным повторением.
                 </h1>
 
                 <p className="text-sm sm:text-base text-indigo-100/90 leading-relaxed">
-                  Local-first, 0ms latency flashcards powered by the modern FSRS algorithm and Gemini AI generation. 100% free and offline-capable.
+                  Локальные карточки с мгновенным откликом (0 мс), алгоритмом FSRS и генерацией через Gemini AI. 100% бесплатно и работает офлайн.
                 </p>
 
                 <div className="flex flex-wrap items-center gap-3 pt-2">
@@ -114,7 +114,7 @@ export default function Home() {
                     className="flex items-center space-x-2 px-4 py-2.5 rounded-xl bg-white text-indigo-700 font-bold text-xs sm:text-sm shadow-md hover:bg-indigo-50 transition active:scale-95"
                   >
                     <Plus className="w-4 h-4" />
-                    <span>Create Deck</span>
+                    <span>Создать колоду</span>
                   </button>
 
                   <button
@@ -122,7 +122,7 @@ export default function Home() {
                     className="flex items-center space-x-2 px-4 py-2.5 rounded-xl bg-indigo-500/30 hover:bg-indigo-500/40 text-white font-bold text-xs sm:text-sm border border-white/20 transition active:scale-95 backdrop-blur-sm"
                   >
                     <Sparkles className="w-4 h-4 text-amber-300" />
-                    <span>Generate with AI</span>
+                    <span>Создать с помощью AI</span>
                   </button>
 
                   <button
@@ -146,7 +146,7 @@ export default function Home() {
                 <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400" />
                 <input
                   type="text"
-                  placeholder="Search decks by title, topic, or tag..."
+                  placeholder="Поиск колод по названию, теме или тегу..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full pl-10 pr-4 py-2 text-sm rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-white placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm"
@@ -164,7 +164,7 @@ export default function Home() {
                         : "bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100"
                     }`}
                   >
-                    All
+                    Все
                   </button>
                   {allTags.map((tag) => (
                     <button
@@ -187,7 +187,7 @@ export default function Home() {
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <h2 className="text-xl font-extrabold text-zinc-900 dark:text-white tracking-tight">
-                  Your Decks ({filteredDecks.length})
+                  Ваши колоды ({filteredDecks.length})
                 </h2>
               </div>
 
@@ -198,10 +198,10 @@ export default function Home() {
                   </div>
                   <div className="space-y-1">
                     <h3 className="font-bold text-zinc-800 dark:text-zinc-200">
-                      No decks found
+                      Колоды не найдены
                     </h3>
                     <p className="text-xs text-zinc-500">
-                      Create your own deck or let Gemini generate one for you.
+                      Создайте собственную колоду или сгенерируйте её с помощью Gemini AI.
                     </p>
                   </div>
                   <div className="flex justify-center space-x-3 pt-2">
@@ -209,13 +209,13 @@ export default function Home() {
                       onClick={() => router.push(`/deck/${generateId()}/edit`)}
                       className="px-4 py-2 rounded-xl bg-indigo-600 text-white text-xs font-semibold shadow-sm"
                     >
-                      Create Deck
+                      Создать колоду
                     </button>
                     <button
                       onClick={() => setIsAIGenerateOpen(true)}
                       className="px-4 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 text-xs font-semibold"
                     >
-                      Generate with AI
+                      Создать с помощью AI
                     </button>
                   </div>
                 </div>

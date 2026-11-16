@@ -83,14 +83,14 @@ export function SettingsModal({ isOpen, onClose, userId }: SettingsModalProps) {
   };
 
   const handleTestTTS = () => {
-    speakText("Hello! This is a test of your spaced repetition text-to-speech audio.", {
+    speakText("Привет! Это проверка синтеза речи для интервальных повторений.", {
       voiceName,
       rate: voiceSpeed,
     });
   };
 
   const handleReSeed = async () => {
-    if (confirm("Restore sample decks (Formulas & Spanish Travel)?")) {
+    if (confirm("Восстановить демонстрационные колоды (Формулы и Испанский разговорник)?")) {
       await seedSampleDataIfEmpty();
       const [d, c, f] = await Promise.all([
         db.decks.count(),
@@ -98,7 +98,7 @@ export function SettingsModal({ isOpen, onClose, userId }: SettingsModalProps) {
         db.fsrs_states.count(),
       ]);
       setStats({ decks: d, cards: c, fsrs: f });
-      alert("Sample decks verified/restored!");
+      alert("Демонстрационные колоды восстановлены!");
     }
   };
 
@@ -148,7 +148,7 @@ export function SettingsModal({ isOpen, onClose, userId }: SettingsModalProps) {
         <div className="px-6 py-4 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between">
           <div className="flex items-center space-x-2">
             <Sliders className="w-5 h-5 text-indigo-500" />
-            <h2 className="text-lg font-bold text-zinc-900 dark:text-white">Settings</h2>
+            <h2 className="text-lg font-bold text-zinc-900 dark:text-white">Настройки</h2>
           </div>
           <button
             onClick={onClose}
@@ -164,7 +164,7 @@ export function SettingsModal({ isOpen, onClose, userId }: SettingsModalProps) {
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <label className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 flex items-center space-x-2">
-                <span>FSRS Target Retention Rate</span>
+                <span>Целевой уровень удержания FSRS</span>
               </label>
               <span className="text-sm font-mono font-bold text-indigo-600 dark:text-indigo-400">
                 {Math.round(retention * 100)}%
@@ -180,7 +180,7 @@ export function SettingsModal({ isOpen, onClose, userId }: SettingsModalProps) {
               className="w-full accent-indigo-600 cursor-pointer"
             />
             <p className="text-xs text-zinc-500 dark:text-zinc-400">
-              Free Spaced Repetition Scheduler (FSRS) optimizes interval spacing to guarantee this retention rate. Recommended: 88% - 92%.
+              Алгоритм FSRS оптимизирует интервалы повторений для гарантии данного уровня удержания памяти. Рекомендуется: 88% – 92%.
             </p>
           </div>
 
@@ -190,7 +190,7 @@ export function SettingsModal({ isOpen, onClose, userId }: SettingsModalProps) {
           <div className="space-y-3">
             <label className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 flex items-center space-x-2">
               <Key className="w-4 h-4 text-amber-500" />
-              <span>Google Gemini API Key</span>
+              <span>API-ключ Google Gemini</span>
             </label>
             <input
               type="password"
@@ -200,7 +200,7 @@ export function SettingsModal({ isOpen, onClose, userId }: SettingsModalProps) {
               className="w-full px-3 py-2 text-sm rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-white placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
             <p className="text-xs text-zinc-500 dark:text-zinc-400">
-              Used for client-side or server flashcard generation with the `@google/genai` SDK. Stored securely in your browser&apos;s local Dexie database.
+              Используется для генерации карточек с помощью AI SDK. Надёжно хранится локально в IndexedDB вашего браузера.
             </p>
           </div>
 
@@ -210,20 +210,20 @@ export function SettingsModal({ isOpen, onClose, userId }: SettingsModalProps) {
           <div className="space-y-3">
             <label className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 flex items-center space-x-2">
               <Volume2 className="w-4 h-4 text-emerald-500" />
-              <span>Text-To-Speech (Native Web Speech API)</span>
+              <span>Синтез речи (Native Web Speech API)</span>
             </label>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <span className="text-xs text-zinc-500 dark:text-zinc-400 block mb-1">
-                  Default Voice
+                  Голос по умолчанию
                 </span>
                 <select
                   value={voiceName}
                   onChange={(e) => setVoiceName(e.target.value)}
                   className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
                 >
-                  <option value="">Browser Default</option>
+                  <option value="">По умолчанию браузера</option>
                   {voices.map((v) => (
                     <option key={v.name} value={v.name}>
                       {v.name} ({v.lang})
@@ -234,7 +234,7 @@ export function SettingsModal({ isOpen, onClose, userId }: SettingsModalProps) {
 
               <div>
                 <div className="flex justify-between items-center mb-1">
-                  <span className="text-xs text-zinc-500 dark:text-zinc-400">Speed</span>
+                  <span className="text-xs text-zinc-500 dark:text-zinc-400">Скорость</span>
                   <span className="text-xs font-mono">{voiceSpeed.toFixed(2)}x</span>
                 </div>
                 <input
@@ -254,7 +254,7 @@ export function SettingsModal({ isOpen, onClose, userId }: SettingsModalProps) {
               onClick={handleTestTTS}
               className="text-xs px-2.5 py-1 rounded bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 transition"
             >
-              Test Voice Pronunciation
+              Проверить произношение
             </button>
           </div>
 
@@ -265,30 +265,30 @@ export function SettingsModal({ isOpen, onClose, userId }: SettingsModalProps) {
             <div className="flex items-center justify-between">
               <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 flex items-center space-x-2">
                 <Database className="w-4 h-4 text-blue-500" />
-                <span>Local Database (Dexie IndexedDB)</span>
+                <span>Локальная база данных (Dexie IndexedDB)</span>
               </span>
               <button
                 onClick={handleReSeed}
                 className="text-xs text-indigo-500 hover:underline flex items-center space-x-1"
-                title="Restore default starter decks"
+                title="Восстановить демонстрационные колоды"
               >
                 <RotateCcw className="w-3 h-3" />
-                <span>Restore Samples</span>
+                <span>Восстановить примеры</span>
               </button>
             </div>
 
             <div className="grid grid-cols-3 gap-2 text-center">
               <div className="p-2.5 rounded-lg bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-800">
                 <div className="text-lg font-bold text-zinc-900 dark:text-white">{stats.decks}</div>
-                <div className="text-[11px] text-zinc-500 dark:text-zinc-400">Decks</div>
+                <div className="text-[11px] text-zinc-500 dark:text-zinc-400">Колоды</div>
               </div>
               <div className="p-2.5 rounded-lg bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-800">
                 <div className="text-lg font-bold text-zinc-900 dark:text-white">{stats.cards}</div>
-                <div className="text-[11px] text-zinc-500 dark:text-zinc-400">Cards</div>
+                <div className="text-[11px] text-zinc-500 dark:text-zinc-400">Карточки</div>
               </div>
               <div className="p-2.5 rounded-lg bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-800">
                 <div className="text-lg font-bold text-zinc-900 dark:text-white">{stats.fsrs}</div>
-                <div className="text-[11px] text-zinc-500 dark:text-zinc-400">FSRS States</div>
+                <div className="text-[11px] text-zinc-500 dark:text-zinc-400">Состояния FSRS</div>
               </div>
             </div>
 
@@ -299,12 +299,12 @@ export function SettingsModal({ isOpen, onClose, userId }: SettingsModalProps) {
                 className="flex items-center justify-center space-x-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-800 dark:text-zinc-200 border border-zinc-200 dark:border-zinc-700 transition"
               >
                 <Download className="w-3.5 h-3.5 text-indigo-500" />
-                <span>Export Backup (JSON)</span>
+                <span>Экспорт базы (JSON)</span>
               </button>
 
               <label className="flex items-center justify-center space-x-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-800 dark:text-zinc-200 border border-zinc-200 dark:border-zinc-700 cursor-pointer transition">
                 <Upload className="w-3.5 h-3.5 text-emerald-500" />
-                <span>Restore Backup</span>
+                <span>Импорт базы (JSON)</span>
                 <input
                   type="file"
                   accept=".json,application/json"
@@ -318,12 +318,12 @@ export function SettingsModal({ isOpen, onClose, userId }: SettingsModalProps) {
               {isFirebaseConfigured() ? (
                 <div className="flex items-center space-x-1 text-emerald-600 dark:text-emerald-400">
                   <CheckCircle className="w-3.5 h-3.5" />
-                  <span>Cloud Firestore Sync Configured (Spark Plan)</span>
+                  <span>Облачная синхронизация Cloud Firestore активна</span>
                 </div>
               ) : (
                 <div className="flex items-center space-x-1 text-zinc-500">
                   <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
-                  <span>Cloud Sync inactive (Running 100% offline local-first)</span>
+                  <span>Облачная синхронизация отключена (работа 100% офлайн локально)</span>
                 </div>
               )}
             </div>
@@ -336,7 +336,7 @@ export function SettingsModal({ isOpen, onClose, userId }: SettingsModalProps) {
             onClick={onClose}
             className="px-4 py-2 text-sm font-medium rounded-lg text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition"
           >
-            Cancel
+            Отмена
           </button>
           <button
             onClick={handleSave}
@@ -345,10 +345,10 @@ export function SettingsModal({ isOpen, onClose, userId }: SettingsModalProps) {
             {savedSuccess ? (
               <>
                 <CheckCircle className="w-4 h-4 text-emerald-300" />
-                <span>Saved!</span>
+                <span>Сохранено!</span>
               </>
             ) : (
-              <span>Save Changes</span>
+              <span>Сохранить изменения</span>
             )}
           </button>
         </div>

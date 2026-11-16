@@ -14,9 +14,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Zinapse - Free Quizlet & FSRS Flashcards",
+  title: "Zinapse - Бесплатный аналог Quizlet и FSRS карточки",
   description:
-    "Local-first flashcard app with modern FSRS spaced repetition, KaTeX math formulas, and Gemini AI card generation.",
+    "Local-first приложение для карточек с современным алгоритмом интервального повторения FSRS, формулами KaTeX и AI-генерацией на базе Gemini.",
   applicationName: "Zinapse",
   appleWebApp: {
     capable: true,
@@ -43,7 +43,7 @@ export default function RootLayout({
 }>) {
   return (
     <html
-      lang="en"
+      lang="ru"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased dark`}
     >
       <body className="min-h-full flex flex-col bg-white dark:bg-black text-zinc-900 dark:text-zinc-100">

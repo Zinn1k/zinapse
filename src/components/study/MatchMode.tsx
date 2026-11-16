@@ -148,16 +148,16 @@ export function MatchMode({ deck, cards, onExit }: MatchModeProps) {
     return (
       <div className="max-w-md mx-auto py-16 text-center space-y-4">
         <h3 className="text-lg font-bold text-zinc-900 dark:text-white">
-          Need at least 2 cards
+          Нужно как минимум 2 карточки
         </h3>
         <p className="text-sm text-zinc-500">
-          Match mode requires at least 2 cards to play.
+          Для игры в «Подбор» требуется не менее 2 карточек.
         </p>
         <button
           onClick={onExit}
           className="px-4 py-2 text-sm rounded-lg bg-indigo-600 text-white font-medium"
         >
-          Return to Deck
+          Вернуться к колоде
         </button>
       </div>
     );
@@ -172,7 +172,7 @@ export function MatchMode({ deck, cards, onExit }: MatchModeProps) {
           className="flex items-center space-x-1.5 text-xs font-medium text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition"
         >
           <ArrowLeft className="w-4 h-4" />
-          <span>Exit Match</span>
+          <span>Выйти из игры</span>
         </button>
 
         {/* Live Stopwatch */}
@@ -184,7 +184,7 @@ export function MatchMode({ deck, cards, onExit }: MatchModeProps) {
         {/* Personal Best */}
         <div className="flex items-center space-x-1 text-xs text-amber-600 dark:text-amber-400 font-semibold">
           <Trophy className="w-3.5 h-3.5" />
-          <span>Best: {personalBest ? `${personalBest}s` : "--"}</span>
+          <span>Рекорд: {personalBest ? `${personalBest}с` : "--"}</span>
         </div>
       </div>
 
@@ -197,12 +197,12 @@ export function MatchMode({ deck, cards, onExit }: MatchModeProps) {
 
           <div className="space-y-2">
             <h2 className="text-2xl font-black text-zinc-900 dark:text-white">
-              Spectacular Speed!
+              Потрясающая скорость!
             </h2>
             <p className="text-sm text-zinc-500 dark:text-zinc-400">
-              You cleared all matching pairs in{" "}
+              Вы соединили все пары за{" "}
               <span className="font-bold text-indigo-600 dark:text-indigo-400">
-                {(elapsedMs / 1000).toFixed(1)} seconds
+                {(elapsedMs / 1000).toFixed(1)} секунд
               </span>
               .
             </p>
@@ -214,13 +214,13 @@ export function MatchMode({ deck, cards, onExit }: MatchModeProps) {
               className="flex items-center space-x-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold shadow-sm transition"
             >
               <RotateCw className="w-4 h-4" />
-              <span>Play Again</span>
+              <span>Играть снова</span>
             </button>
             <button
               onClick={onExit}
               className="px-5 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-sm font-semibold transition"
             >
-              Back to Deck
+              Назад к колоде
             </button>
           </div>
         </div>

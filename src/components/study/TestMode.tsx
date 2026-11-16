@@ -78,9 +78,9 @@ export function TestMode({ deck, cards, onExit }: TestModeProps) {
           id: `q_${c.id}_tf`,
           card: c,
           type: "true_false",
-          prompt: `${cardTerm}\n\n*Statement:* "${displayedAnswer}"`,
-          correctAnswer: isTrue ? "True" : "False",
-          options: ["True", "False"],
+          prompt: `${cardTerm}\n\n*Утверждение:* "${displayedAnswer}"`,
+          correctAnswer: isTrue ? "Верно" : "Неверно",
+          options: ["Верно", "Неверно"],
           isTrue,
         });
       } else {
@@ -145,13 +145,13 @@ export function TestMode({ deck, cards, onExit }: TestModeProps) {
   if (cards.length === 0) {
     return (
       <div className="max-w-md mx-auto py-16 text-center space-y-4">
-        <h3 className="text-lg font-bold text-zinc-900 dark:text-white">Deck is empty</h3>
-        <p className="text-sm text-zinc-500">Need cards to generate a test.</p>
+        <h3 className="text-lg font-bold text-zinc-900 dark:text-white">Колода пуста</h3>
+        <p className="text-sm text-zinc-500">Для создания теста необходимы карточки.</p>
         <button
           onClick={onExit}
           className="px-4 py-2 text-sm rounded-lg bg-indigo-600 text-white font-medium"
         >
-          Return to Deck
+          Вернуться к колоде
         </button>
       </div>
     );
@@ -166,18 +166,18 @@ export function TestMode({ deck, cards, onExit }: TestModeProps) {
           className="flex items-center space-x-1.5 text-xs font-medium text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition"
         >
           <ArrowLeft className="w-4 h-4" />
-          <span>Exit Test</span>
+          <span>Выйти из теста</span>
         </button>
 
         <div className="flex items-center space-x-2">
           <FileCheck className="w-5 h-5 text-indigo-500" />
           <h2 className="text-lg font-bold text-zinc-900 dark:text-white">
-            Practice Test: {deck.title}
+            Проверочный тест: {deck.title}
           </h2>
         </div>
 
         <span className="text-xs text-zinc-400">
-          {Object.keys(userAnswers).length} / {questions.length} answered
+          Отвечено: {Object.keys(userAnswers).length} из {questions.length}
         </span>
       </div>
 
@@ -187,7 +187,7 @@ export function TestMode({ deck, cards, onExit }: TestModeProps) {
           <div className="flex items-center justify-center space-x-2">
             <Award className="w-6 h-6 text-indigo-500" />
             <h3 className="text-xl font-bold text-zinc-900 dark:text-white">
-              Test Results
+              Результаты теста
             </h3>
           </div>
 
@@ -196,7 +196,7 @@ export function TestMode({ deck, cards, onExit }: TestModeProps) {
           </div>
 
           <p className="text-sm text-zinc-600 dark:text-zinc-400">
-            You scored {score.correct} out of {score.total} questions correctly.
+            Вы ответили правильно на {score.correct} из {score.total} вопросов.
           </p>
 
           <div className="flex justify-center space-x-3 pt-2">
@@ -205,13 +205,13 @@ export function TestMode({ deck, cards, onExit }: TestModeProps) {
               className="flex items-center space-x-1.5 px-4 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-xs font-semibold transition"
             >
               <RotateCw className="w-4 h-4" />
-              <span>Retake Test</span>
+              <span>Пройти заново</span>
             </button>
             <button
               onClick={onExit}
               className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-sm transition"
             >
-              Back to Deck
+              Назад к колоде
             </button>
           </div>
         </div>
@@ -242,19 +242,19 @@ export function TestMode({ deck, cards, onExit }: TestModeProps) {
             >
               <div className="flex items-start justify-between mb-3">
                 <span className="text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
-                  Question {idx + 1} • {q.type === "choice" ? "Multiple Choice" : q.type === "true_false" ? "True / False" : "Written"}
+                  Вопрос {idx + 1} • {q.type === "choice" ? "Выбор ответа" : q.type === "true_false" ? "Верно / Неверно" : "Письменный ответ"}
                 </span>
                 {isSubmitted && (
                   <div>
                     {isQuestionCorrect ? (
                       <span className="flex items-center space-x-1 text-xs font-bold text-emerald-600 dark:text-emerald-400">
                         <CheckCircle className="w-4 h-4" />
-                        <span>Correct</span>
+                        <span>Верно</span>
                       </span>
                     ) : (
                       <span className="flex items-center space-x-1 text-xs font-bold text-red-600 dark:text-red-400">
                         <XCircle className="w-4 h-4" />
-                        <span>Incorrect</span>
+                        <span>Неверно</span>
                       </span>
                     )}
                   </div>
@@ -325,12 +325,12 @@ export function TestMode({ deck, cards, onExit }: TestModeProps) {
                     disabled={isSubmitted}
                     value={userAns}
                     onChange={(e) => handleSelectAnswer(q.id, e.target.value)}
-                    placeholder="Type your answer here..."
+                    placeholder="Введите ваш ответ..."
                     className="w-full px-3.5 py-2.5 text-sm rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   />
                   {isSubmitted && !isQuestionCorrect && (
                     <div className="p-3 text-xs rounded-xl bg-zinc-100 dark:bg-zinc-800/80 text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700">
-                      <span className="font-semibold block mb-0.5">Correct Answer:</span>
+                      <span className="font-semibold block mb-0.5">Правильный ответ:</span>
                       <MarkdownMath content={q.correctAnswer} />
                     </div>
                   )}
@@ -350,7 +350,7 @@ export function TestMode({ deck, cards, onExit }: TestModeProps) {
             className="flex items-center space-x-2 px-8 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm shadow-md shadow-indigo-500/25 transition disabled:opacity-40"
           >
             <CheckCircle className="w-5 h-5" />
-            <span>Submit Test ({Object.keys(userAnswers).length}/{questions.length})</span>
+            <span>Завершить тест ({Object.keys(userAnswers).length}/{questions.length})</span>
           </button>
         </div>
       )}

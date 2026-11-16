@@ -2,10 +2,10 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Zinapse - Free Quizlet & FSRS Flashcards",
+    name: "Zinapse - Бесплатный аналог Quizlet и FSRS карточки",
     short_name: "Zinapse",
     description:
-      "Local-first flashcard app with modern FSRS spaced repetition, KaTeX math formulas, and Gemini AI card generation.",
+      "Local-first приложение для карточек с современным алгоритмом интервального повторения FSRS, формулами KaTeX и AI-генерацией на базе Gemini.",
     start_url: "/",
     display: "standalone",
     orientation: "portrait",

@@ -154,13 +154,13 @@ export function FlashcardsMode({
   if (cards.length === 0) {
     return (
       <div className="max-w-xl mx-auto py-16 text-center space-y-4">
-        <h3 className="text-lg font-bold text-zinc-900 dark:text-white">Deck is empty</h3>
-        <p className="text-sm text-zinc-500">Please add cards to this deck before studying.</p>
+        <h3 className="text-lg font-bold text-zinc-900 dark:text-white">Колода пуста</h3>
+        <p className="text-sm text-zinc-500">Пожалуйста, добавьте карточки в эту колоду перед началом повторения.</p>
         <button
           onClick={onExit}
           className="px-4 py-2 text-sm rounded-lg bg-indigo-600 text-white font-medium"
         >
-          Return to Deck
+          Вернуться к колоде
         </button>
       </div>
     );
@@ -174,10 +174,10 @@ export function FlashcardsMode({
         </div>
         <div className="space-y-2">
           <h2 className="text-2xl font-extrabold text-zinc-900 dark:text-white">
-            Study Session Finished!
+            Сессия повторения завершена!
           </h2>
           <p className="text-sm text-zinc-500 dark:text-zinc-400">
-            You reviewed all {cards.length} cards. Your progress has been calculated by the FSRS spaced repetition engine.
+            Вы повторили все карточки ({cards.length}). Ваш прогресс сохранен алгоритмом интервального повторения FSRS.
           </p>
         </div>
         <div className="flex justify-center space-x-3 pt-2">
@@ -190,13 +190,13 @@ export function FlashcardsMode({
             className="flex items-center space-x-2 px-4 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-sm font-semibold transition"
           >
             <RotateCw className="w-4 h-4" />
-            <span>Study Again</span>
+            <span>Повторить снова</span>
           </button>
           <button
             onClick={onExit}
             className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold shadow-sm transition"
           >
-            Back to Deck
+            Назад к колоде
           </button>
         </div>
       </div>
@@ -216,7 +216,7 @@ export function FlashcardsMode({
           className="flex items-center space-x-1.5 text-xs font-medium text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition"
         >
           <ArrowLeft className="w-4 h-4" />
-          <span>Back to Deck</span>
+          <span>Назад к колоде</span>
         </button>
 
         <div className="flex items-center space-x-2 text-xs font-semibold text-zinc-600 dark:text-zinc-400">
@@ -247,14 +247,14 @@ export function FlashcardsMode({
           <button
             onClick={handleShuffle}
             className="p-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-900 text-zinc-600 dark:text-zinc-400 transition"
-            title="Shuffle cards"
+            title="Перемешать карточки"
           >
             <Shuffle className="w-4 h-4" />
           </button>
           <button
             onClick={() => setIsFullscreen(!isFullscreen)}
             className="p-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-900 text-zinc-600 dark:text-zinc-400 transition"
-            title={isFullscreen ? "Exit Fullscreen" : "Fullscreen"}
+            title={isFullscreen ? "Выйти из полноэкранного режима" : "Полноэкранный режим"}
           >
             {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
           </button>
@@ -291,7 +291,7 @@ export function FlashcardsMode({
                       setShowHint(!showHint);
                     }}
                     className="p-1 text-amber-500 hover:text-amber-600"
-                    title="Toggle Hint"
+                    title="Показать / скрыть подсказку"
                   >
                     <HelpCircle className="w-4 h-4" />
                   </button>
@@ -299,7 +299,7 @@ export function FlashcardsMode({
                 <button
                   onClick={handleTTS}
                   className="p-1 text-zinc-400 hover:text-indigo-500 transition"
-                  title="Speak Audio"
+                  title="Озвучить"
                 >
                   <Volume2 className="w-4 h-4" />
                 </button>
@@ -339,13 +339,13 @@ export function FlashcardsMode({
                   animate={{ opacity: 1, y: 0 }}
                   className="mt-4 p-2 text-xs rounded-lg bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 inline-block border border-amber-200 dark:border-amber-900"
                 >
-                  Hint: {currentCard.hint}
+                  Подсказка: {currentCard.hint}
                 </motion.div>
               )}
             </div>
 
             <div className="text-center text-xs text-zinc-400">
-              Click or press <kbd className="px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-[10px] font-mono">Space</kbd> to flip
+              Нажмите мышью или <kbd className="px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-[10px] font-mono">Пробел</kbd>, чтобы перевернуть
             </div>
           </div>
 
@@ -358,7 +358,7 @@ export function FlashcardsMode({
               <button
                 onClick={handleTTS}
                 className="p-1 text-zinc-400 hover:text-indigo-500 transition"
-                title="Speak Audio"
+                title="Озвучить"
               >
                 <Volume2 className="w-4 h-4" />
               </button>
@@ -400,7 +400,7 @@ export function FlashcardsMode({
             </div>
 
             <div className="text-center text-xs text-zinc-400">
-              Rate your recall below to schedule the next review
+              Оцените, насколько легко вы вспомнили ответ, чтобы запланировать следующее повторение
             </div>
           </div>
         </motion.div>
@@ -447,7 +447,7 @@ export function FlashcardsMode({
             onClick={handlePrev}
             disabled={currentIndex === 0}
             className="p-2.5 rounded-full border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-900 disabled:opacity-30 transition"
-            title="Previous (Left arrow)"
+            title="Назад (Стрелка влево)"
           >
             <ChevronLeft className="w-5 h-5 text-zinc-700 dark:text-zinc-300" />
           </button>
@@ -457,13 +457,13 @@ export function FlashcardsMode({
             className="flex items-center space-x-1.5 px-4 py-2 rounded-xl bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-xs font-medium text-zinc-700 dark:text-zinc-200 transition"
           >
             <RotateCw className="w-3.5 h-3.5" />
-            <span>Flip</span>
+            <span>Перевернуть</span>
           </button>
 
           <button
             onClick={handleNext}
             className="p-2.5 rounded-full border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-900 transition"
-            title="Next (Right arrow)"
+            title="Вперед (Стрелка вправо)"
           >
             <ChevronRight className="w-5 h-5 text-zinc-700 dark:text-zinc-300" />
           </button>

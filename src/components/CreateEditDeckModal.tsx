@@ -69,7 +69,7 @@ export function CreateEditDeckModal({
 
   const handleSave = async () => {
     if (!title.trim()) {
-      setError("Please provide a title for the deck.");
+      setError("Пожалуйста, введите название колоды.");
       return;
     }
 
@@ -149,7 +149,7 @@ export function CreateEditDeckModal({
           <div className="flex items-center space-x-2">
             <FolderPlus className="w-5 h-5 text-indigo-500" />
             <h2 className="text-lg font-bold text-zinc-900 dark:text-white">
-              {deckToEdit ? "Edit Deck" : "Create New Deck"}
+              {deckToEdit ? "Редактировать колоду" : "Создать новую колоду"}
             </h2>
           </div>
           <button
@@ -170,39 +170,39 @@ export function CreateEditDeckModal({
 
           <div>
             <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1">
-              Title *
+              Название *
             </label>
             <input
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g. Molecular Biology 101"
+              placeholder="Например: Молекулярная биология"
               className="w-full px-3.5 py-2 text-sm rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
           </div>
 
           <div>
             <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1">
-              Description
+              Описание
             </label>
             <textarea
               rows={2}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="A brief summary of what this deck covers..."
+              placeholder="Краткое описание того, о чем эта колода..."
               className="w-full px-3.5 py-2 text-sm rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
           </div>
 
           <div>
             <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1">
-              Tags (comma separated)
+              Теги (через запятую)
             </label>
             <input
               type="text"
               value={tagsInput}
               onChange={(e) => setTagsInput(e.target.value)}
-              placeholder="Biology, Cellular, ExamPrep"
+              placeholder="Биология, Клетки, Экзамен"
               className="w-full px-3.5 py-2 text-sm rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
           </div>
@@ -218,18 +218,18 @@ export function CreateEditDeckModal({
                 <Upload className="w-3.5 h-3.5" />
                 <span>
                   {importMode
-                    ? "Hide Batch / Quizlet Import"
-                    : "+ Import from Quizlet, Anki, or CSV"}
+                    ? "Скрыть импорт"
+                    : "+ Импорт из Quizlet, Anki или CSV"}
                 </span>
               </button>
 
               {importMode && (
                 <div className="mt-3 space-y-3 p-3.5 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-800">
                   <div className="flex items-center justify-between text-xs text-zinc-600 dark:text-zinc-400">
-                    <span>Paste exported cards:</span>
+                    <span>Вставьте экспортированные карточки:</span>
                     {parsedPreviewCount > 0 && (
                       <span className="font-semibold text-emerald-600 dark:text-emerald-400">
-                        {parsedPreviewCount} cards recognized
+                        Распознано: {parsedPreviewCount} карт.
                       </span>
                     )}
                   </div>
@@ -238,29 +238,29 @@ export function CreateEditDeckModal({
                     rows={4}
                     value={importText}
                     onChange={(e) => setImportText(e.target.value)}
-                    placeholder={"Term 1\tDefinition 1\nTerm 2\tDefinition 2"}
+                    placeholder={"Термин 1\tОпределение 1\nТермин 2\tОпределение 2"}
                     className="w-full px-3 py-2 text-xs font-mono rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
                   />
 
                   <div className="grid grid-cols-2 gap-2 text-xs">
                     <div>
                       <span className="block text-zinc-500 dark:text-zinc-400 mb-0.5">
-                        Between Term & Def:
+                        Между термином и определением:
                       </span>
                       <select
                         value={termSeparator}
                         onChange={(e) => setTermSeparator(e.target.value)}
                         className="w-full px-2 py-1 rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900"
                       >
-                        <option value="	">Tab (Quizlet default)</option>
-                        <option value=",">Comma (,)</option>
-                        <option value=" - ">Dash ( - )</option>
-                        <option value=";">Semicolon (;)</option>
+                        <option value="	">Табуляция (по умолчанию в Quizlet)</option>
+                        <option value=",">Запятая (,)</option>
+                        <option value=" - ">Дефис ( - )</option>
+                        <option value=";">Точка с запятой (;)</option>
                       </select>
                     </div>
                     <div>
                       <span className="block text-zinc-500 dark:text-zinc-400 mb-0.5">
-                        Between Rows:
+                        Между карточками:
                       </span>
                       <select
                         value={cardSeparator}
@@ -268,9 +268,9 @@ export function CreateEditDeckModal({
                         className="w-full px-2 py-1 rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900"
                       >
                         <option value="
-">New Line (Standard)</option>
+">Новая строка (стандартно)</option>
                         <option value="
-">Double Line</option>
+">Двойная строка</option>
                       </select>
                     </div>
                   </div>
@@ -286,13 +286,13 @@ export function CreateEditDeckModal({
             onClick={onClose}
             className="px-4 py-2 text-sm font-medium rounded-lg text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition"
           >
-            Cancel
+            Отмена
           </button>
           <button
             onClick={handleSave}
             className="px-4 py-2 text-sm font-medium rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm transition"
           >
-            {deckToEdit ? "Save Changes" : "Create Deck"}
+            {deckToEdit ? "Сохранить изменения" : "Создать колоду"}
           </button>
         </div>
       </div>

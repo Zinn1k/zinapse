@@ -18,7 +18,7 @@ export async function POST(req: Request) {
       return NextResponse.json(
         {
           error:
-            "Gemini API key is not configured. Please add your Gemini API Key in Settings or set GEMINI_API_KEY in .env.local.",
+            "Ключ Gemini API не настроен. Добавьте API-ключ в Настройках или укажите GEMINI_API_KEY в .env.local.",
         },
         { status: 400 }
       );
@@ -26,7 +26,7 @@ export async function POST(req: Request) {
 
     if (!prompt || typeof prompt !== "string" || !prompt.trim()) {
       return NextResponse.json(
-        { error: "A prompt or topic text is required to generate cards." },
+        { error: "Необходимо указать тему или текст для генерации карточек." },
         { status: 400 }
       );
     }
@@ -73,7 +73,7 @@ Generate exactly ${count} flashcards.`;
     const text = response.text;
     if (!text) {
       return NextResponse.json(
-        { error: "Empty response from Gemini API" },
+        { error: "Пустой ответ от Gemini API." },
         { status: 500 }
       );
     }
@@ -82,7 +82,7 @@ Generate exactly ${count} flashcards.`;
     return NextResponse.json({ cards });
   } catch (error: unknown) {
     console.error("AI Generation error:", error);
-    const message = error instanceof Error ? error.message : "Failed to generate flashcards.";
+    const message = error instanceof Error ? error.message : "Не удалось сгенерировать карточки.";
     return NextResponse.json(
       { error: message },
       { status: 500 }

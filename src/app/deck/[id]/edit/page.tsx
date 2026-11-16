@@ -156,7 +156,7 @@ export default function EditDeckPage({
 
   const handleDeleteCard = (id: string) => {
     if (cards.length <= 1) {
-      alert("A deck must contain at least one card.");
+      alert("Колода должна содержать как минимум одну карточку.");
       return;
     }
     setCards((prev) =>
@@ -200,14 +200,14 @@ export default function EditDeckPage({
       );
     } catch (err: unknown) {
       console.error(err);
-      alert("Failed to compress image to WebP.");
+      alert("Не удалось сжать изображение в WebP.");
     }
   };
 
   // 1-Click Import Cards
   const handleApplyImport = () => {
     if (!importPreviewData || importPreviewData.cards.length === 0) {
-      alert("No valid cards found in the text.");
+      alert("В тексте не найдено подходящих карточек.");
       return;
     }
 
@@ -236,7 +236,7 @@ export default function EditDeckPage({
   // Save Deck to Dexie
   const handleSaveDeck = async () => {
     if (!title.trim()) {
-      setErrorMessage("Please enter a title for this deck.");
+      setErrorMessage("Пожалуйста, укажите название колоды.");
       window.scrollTo({ top: 0, behavior: "smooth" });
       return;
     }
@@ -246,7 +246,7 @@ export default function EditDeckPage({
     );
 
     if (validCards.length === 0) {
-      setErrorMessage("Please add at least one card with a term or definition.");
+      setErrorMessage("Пожалуйста, добавьте хотя бы одну карточку с термином или определением.");
       return;
     }
 
@@ -314,7 +314,7 @@ export default function EditDeckPage({
             className="flex items-center space-x-1.5 text-xs font-semibold text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition"
           >
             <ArrowLeft className="w-4 h-4" />
-            <span>Back to Decks</span>
+            <span>Назад к колодам</span>
           </Link>
 
           <div className="flex items-center space-x-2">
@@ -325,7 +325,7 @@ export default function EditDeckPage({
               className="text-xs"
             >
               <Upload className="w-3.5 h-3.5 mr-1" />
-              <span>Import Quizlet / CSV</span>
+              <span>Импорт Quizlet / CSV</span>
             </Button>
 
             <Button
@@ -335,7 +335,7 @@ export default function EditDeckPage({
               className="text-xs"
             >
               <Save className="w-3.5 h-3.5 mr-1" />
-              <span>{isSaving ? "Saving..." : "Save Deck"}</span>
+              <span>{isSaving ? "Сохранение..." : "Сохранить"}</span>
             </Button>
           </div>
         </div>
@@ -356,11 +356,11 @@ export default function EditDeckPage({
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div className="flex-1">
                 <label className="block text-xs font-bold uppercase tracking-wider text-zinc-500 mb-1.5">
-                  Deck Title *
+                  Название колоды *
                 </label>
                 <Input
                   type="text"
-                  placeholder="e.g. Medical Terminology: Nervous System"
+                  placeholder="Например: Медицинская терминология: Нервная система"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   className="text-base font-semibold"
@@ -370,7 +370,7 @@ export default function EditDeckPage({
 
               <div className="flex items-center space-x-4 shrink-0 pt-2 sm:pt-4">
                 <div className="flex items-center space-x-2">
-                  <span className="text-xs text-zinc-500">Public</span>
+                  <span className="text-xs text-zinc-500">Публичная</span>
                   <Switch checked={isPublic} onCheckedChange={setIsPublic} />
                 </div>
 
@@ -381,7 +381,7 @@ export default function EditDeckPage({
                     type="button"
                     onClick={copyShareCodeToClipboard}
                     className="p-1 hover:text-indigo-500"
-                    title="Copy Share Code"
+                    title="Скопировать код доступа"
                   >
                     {copiedShareCode ? (
                       <Check className="w-3 h-3 text-emerald-500" />
@@ -395,11 +395,11 @@ export default function EditDeckPage({
 
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-zinc-500 mb-1.5">
-                Description
+                Описание
               </label>
               <Textarea
                 rows={2}
-                placeholder="What is this deck about?"
+                placeholder="О чем эта колода?"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
               />
@@ -407,11 +407,11 @@ export default function EditDeckPage({
 
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-zinc-500 mb-1.5">
-                Tags (comma separated)
+                Теги (через запятую)
               </label>
               <Input
                 type="text"
-                placeholder="Medicine, Anatomy, USMLE"
+                placeholder="Медицина, Анатомия, Экзамен"
                 value={tagsInput}
                 onChange={(e) => setTagsInput(e.target.value)}
               />
@@ -423,10 +423,10 @@ export default function EditDeckPage({
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-bold text-zinc-900 dark:text-white">
-              Cards ({cards.length})
+              Карточки ({cards.length})
             </h2>
             <span className="text-xs text-zinc-500">
-              Use <kbd className="px-1.5 py-0.5 rounded bg-zinc-200 dark:bg-zinc-800 font-mono text-[10px]">Tab</kbd> to jump between fields
+              Используйте <kbd className="px-1.5 py-0.5 rounded bg-zinc-200 dark:bg-zinc-800 font-mono text-[10px]">Tab</kbd> для переключения между полями
             </span>
           </div>
 
@@ -446,7 +446,7 @@ export default function EditDeckPage({
                         onClick={() => handleMoveCard(index, "up")}
                         disabled={index === 0}
                         className="p-1 rounded text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 disabled:opacity-20"
-                        title="Move Up"
+                        title="Переместить вверх"
                       >
                         <ChevronUp className="w-4 h-4" />
                       </button>
@@ -455,7 +455,7 @@ export default function EditDeckPage({
                         onClick={() => handleMoveCard(index, "down")}
                         disabled={index === cards.length - 1}
                         className="p-1 rounded text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 disabled:opacity-20"
-                        title="Move Down"
+                        title="Переместить вниз"
                       >
                         <ChevronDown className="w-4 h-4" />
                       </button>
@@ -463,7 +463,7 @@ export default function EditDeckPage({
                         type="button"
                         onClick={() => handleDeleteCard(card.id)}
                         className="p-1 rounded text-zinc-400 hover:text-red-500 transition"
-                        title="Delete Card"
+                        title="Удалить карточку"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -476,13 +476,13 @@ export default function EditDeckPage({
                     <div className="space-y-1.5">
                       <div className="flex items-center justify-between">
                         <label className="text-[11px] font-bold uppercase tracking-wider text-indigo-500">
-                          Term *
+                          Термин *
                         </label>
                       </div>
                       <Input
                         value={card.term}
                         onChange={(e) => handleCardChange(card.id, "term", e.target.value)}
-                        placeholder="Enter term or question..."
+                        placeholder="Введите термин или вопрос..."
                         className="font-medium"
                       />
                     </div>
@@ -491,7 +491,7 @@ export default function EditDeckPage({
                     <div className="space-y-1.5">
                       <div className="flex items-center justify-between">
                         <label className="text-[11px] font-bold uppercase tracking-wider text-emerald-500">
-                          Definition *
+                          Определение *
                         </label>
                         <div className="flex items-center space-x-2">
                           <button
@@ -500,7 +500,7 @@ export default function EditDeckPage({
                             className="text-[11px] text-indigo-500 hover:underline flex items-center space-x-1"
                           >
                             <ImageIcon className="w-3.5 h-3.5" />
-                            <span>{card.imageData ? "Change Image" : "Add Image"}</span>
+                            <span>{card.imageData ? "Заменить картинку" : "Добавить картинку"}</span>
                           </button>
                           <input
                             type="file"
@@ -517,7 +517,7 @@ export default function EditDeckPage({
                         rows={2}
                         value={card.definition}
                         onChange={(e) => handleCardChange(card.id, "definition", e.target.value)}
-                        placeholder="Enter definition or answer..."
+                        placeholder="Введите определение или ответ..."
                       />
                     </div>
                   </div>
@@ -528,7 +528,7 @@ export default function EditDeckPage({
                       <Input
                         value={card.hint || ""}
                         onChange={(e) => handleCardChange(card.id, "hint", e.target.value)}
-                        placeholder="Optional hint or mnemonic..."
+                        placeholder="Подсказка или мнемоника (необязательно)..."
                         className="text-xs h-8"
                       />
                     </div>
@@ -537,10 +537,10 @@ export default function EditDeckPage({
                       <div className="relative inline-flex items-center space-x-2 p-1.5 rounded-lg bg-zinc-100 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700">
                         <img
                           src={card.imageData}
-                          alt="Card attachment"
+                          alt="Прикрепленное изображение"
                           className="h-10 w-10 object-cover rounded"
                         />
-                        <span className="text-[10px] text-zinc-500">WebP image</span>
+                        <span className="text-[10px] text-zinc-500">Изображение WebP</span>
                         <button
                           type="button"
                           onClick={() =>
@@ -571,7 +571,7 @@ export default function EditDeckPage({
               className="w-full sm:w-auto"
             >
               <Plus className="w-4 h-4 mr-1.5" />
-              <span>Add Card</span>
+              <span>Добавить карточку</span>
             </Button>
 
             <div className="flex items-center space-x-2 w-full sm:w-auto justify-end">
@@ -580,12 +580,12 @@ export default function EditDeckPage({
                 onClick={() => setIsImportModalOpen(true)}
               >
                 <Upload className="w-3.5 h-3.5 mr-1.5" />
-                <span>Import Batch</span>
+                <span>Пакетный импорт</span>
               </Button>
 
               <Button onClick={handleSaveDeck} disabled={isSaving}>
                 <Save className="w-4 h-4 mr-1.5" />
-                <span>Save Deck</span>
+                <span>Сохранить колоду</span>
               </Button>
             </div>
           </div>
@@ -598,20 +598,20 @@ export default function EditDeckPage({
           <DialogHeader>
             <DialogTitle className="flex items-center space-x-2">
               <Upload className="w-5 h-5 text-indigo-500" />
-              <span>Fast Import from Quizlet, Excel, or CSV</span>
+              <span>Быстрый импорт из Quizlet, Excel или CSV</span>
             </DialogTitle>
           </DialogHeader>
 
           <div className="space-y-4 overflow-y-auto pr-1 flex-1 py-2">
             <p className="text-xs text-zinc-500">
-              Copy and paste your terms and definitions below. Supports Quizlet tab-delimited exports, semicolons, dashes (<code className="px-1 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800"> - </code>), or CSV.
+              Вставьте ваши термины и определения ниже. Поддерживается экспорт из Quizlet (с табуляцией), точки с запятой, дефисы (<code className="px-1 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800"> - </code>) или CSV.
             </p>
 
             <Textarea
               rows={6}
               value={importRawText}
               onChange={(e) => setImportRawText(e.target.value)}
-              placeholder={"Cell\tThe basic structural and functional unit of life\nDNA\tDeoxyribonucleic acid\nMitochondria\tPowerhouse of the cell"}
+              placeholder={"Клетка\tОсновная структурно-функциональная единица жизни\nДНК\tДезоксирибонуклеиновая кислота\nМитохондрия\tЭнергетическая станция клетки"}
               className="font-mono text-xs"
             />
 
@@ -619,10 +619,10 @@ export default function EditDeckPage({
               <div className="space-y-2 pt-2 border-t border-zinc-200 dark:border-zinc-800">
                 <div className="flex items-center justify-between text-xs font-semibold">
                   <span>
-                    Detected: {importPreviewData.validCount} valid cards
+                    Распознано: {importPreviewData.validCount} карточек
                   </span>
                   <Badge variant="outline" className="text-[10px]">
-                    Delimiter: {importPreviewData.detectedTermSeparator === "\t" ? "Tab" : `"${importPreviewData.detectedTermSeparator}"`}
+                    Разделитель: {importPreviewData.detectedTermSeparator === "\t" ? "Табуляция" : `"${importPreviewData.detectedTermSeparator}"`}
                   </Badge>
                 </div>
 
@@ -642,14 +642,14 @@ export default function EditDeckPage({
                   ))}
                   {importPreviewData.cards.length > 15 && (
                     <div className="p-2 text-center text-zinc-400 text-[11px] bg-zinc-50 dark:bg-zinc-900">
-                      ...and {importPreviewData.cards.length - 15} more cards
+                      ...и еще {importPreviewData.cards.length - 15} карточек
                     </div>
                   )}
                 </div>
 
                 {importPreviewData.invalidLines.length > 0 && (
                   <p className="text-[11px] text-amber-500">
-                    Skipped {importPreviewData.invalidLines.length} unrecognized lines.
+                    Пропущено {importPreviewData.invalidLines.length} нераспознанных строк.
                   </p>
                 )}
               </div>
@@ -658,13 +658,13 @@ export default function EditDeckPage({
 
           <DialogFooter className="pt-2 border-t border-zinc-100 dark:border-zinc-800">
             <Button variant="ghost" onClick={() => setIsImportModalOpen(false)}>
-              Cancel
+              Отмена
             </Button>
             <Button
               onClick={handleApplyImport}
               disabled={!importPreviewData || importPreviewData.validCount === 0}
             >
-              Add {importPreviewData?.validCount ?? 0} Cards
+              Добавить {importPreviewData?.validCount ?? 0} карточек
             </Button>
           </DialogFooter>
         </DialogContent>

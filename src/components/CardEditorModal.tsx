@@ -77,7 +77,7 @@ export function CardEditorModal({
     if (!file) return;
 
     setImageCompressing(true);
-    setCompressionInfo("Compressing to WebP (max ~40KB)...");
+    setCompressionInfo("Сжатие в WebP (до ~40 КБ)...");
 
     try {
       const result = await compressImageToWebP(file, { maxSizeKB: 40 });
@@ -86,11 +86,11 @@ export function CardEditorModal({
       } else {
         setBackImage(result.dataUrl);
       }
-      setCompressionInfo(`Compressed: ${result.sizeKB} KB (${result.width}x${result.height} WebP)`);
+      setCompressionInfo(`Сжато: ${result.sizeKB} КБ (${result.width}x${result.height} WebP)`);
     } catch (err: unknown) {
       console.error(err);
-      const msg = err instanceof Error ? err.message : "Unknown error";
-      setError("Failed to compress image: " + msg);
+      const msg = err instanceof Error ? err.message : "Неизвестная ошибка";
+      setError("Не удалось сжать изображение: " + msg);
     } finally {
       setImageCompressing(false);
     }
@@ -98,11 +98,11 @@ export function CardEditorModal({
 
   const handleSave = async () => {
     if (!front.trim()) {
-      setError("Please provide content for the Front side.");
+      setError("Пожалуйста, заполните лицевую сторону.");
       return;
     }
     if (!back.trim()) {
-      setError("Please provide content for the Back side.");
+      setError("Пожалуйста, заполните обратную сторону.");
       return;
     }
 
@@ -165,7 +165,7 @@ export function CardEditorModal({
         {/* Header */}
         <div className="px-6 py-4 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between">
           <h2 className="text-lg font-bold text-zinc-900 dark:text-white">
-            {cardToEdit ? "Edit Flashcard" : "Add Flashcard"}
+            {cardToEdit ? "Редактировать карточку" : "Добавить карточку"}
           </h2>
           <div className="flex items-center space-x-2">
             <button
@@ -177,7 +177,7 @@ export function CardEditorModal({
               }`}
             >
               <Eye className="w-3.5 h-3.5" />
-              <span>{showPreview ? "Editor" : "Preview"}</span>
+              <span>{showPreview ? "Редактор" : "Предпросмотр"}</span>
             </button>
             <button
               onClick={onClose}
@@ -208,9 +208,9 @@ export function CardEditorModal({
             <div className="space-y-4">
               <div className="p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/40">
                 <span className="text-[11px] font-bold uppercase tracking-wider text-indigo-500 mb-2 block">
-                  Front Preview
+                  Лицевая сторона (предпросмотр)
                 </span>
-                <MarkdownMath content={front || "*(Empty front)*"} />
+                <MarkdownMath content={front || "*(Лицевая сторона пуста)*"} />
                 {frontImage && (
                   <img
                     src={frontImage}
@@ -222,9 +222,9 @@ export function CardEditorModal({
 
               <div className="p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/40">
                 <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-500 mb-2 block">
-                  Back Preview
+                  Обратная сторона (предпросмотр)
                 </span>
-                <MarkdownMath content={back || "*(Empty back)*"} />
+                <MarkdownMath content={back || "*(Обратная сторона пуста)*"} />
                 {backImage && (
                   <img
                     src={backImage}
@@ -234,7 +234,7 @@ export function CardEditorModal({
                 )}
                 {hint && (
                   <p className="mt-2 text-xs italic text-amber-600 dark:text-amber-400">
-                    Hint: {hint}
+                    Подсказка: {hint}
                   </p>
                 )}
               </div>
@@ -247,7 +247,7 @@ export function CardEditorModal({
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-2">
                     <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
-                      FRONT (Term / Question / $LaTeX$) *
+                      ЛИЦЕВАЯ СТОРОНА (Термин / Вопрос / $LaTeX$) *
                     </label>
                     <button
                       type="button"
@@ -275,7 +275,7 @@ export function CardEditorModal({
                       type="button"
                       onClick={() => speakText(front, { lang: frontLang })}
                       className="p-1 text-zinc-400 hover:text-indigo-500"
-                      title="Test Audio Pronunciation"
+                      title="Проверить произношение"
                     >
                       <Volume2 className="w-3.5 h-3.5" />
                     </button>
@@ -285,7 +285,7 @@ export function CardEditorModal({
                       className="text-xs text-indigo-500 hover:underline flex items-center space-x-1"
                     >
                       <ImageIcon className="w-3.5 h-3.5" />
-                      <span>{frontImage ? "Change Image" : "Add Image"}</span>
+                      <span>{frontImage ? "Заменить изображение" : "Добавить изображение"}</span>
                     </button>
                     <input
                       type="file"
@@ -301,7 +301,7 @@ export function CardEditorModal({
                   rows={3}
                   value={front}
                   onChange={(e) => setFront(e.target.value)}
-                  placeholder="e.g. What is the derivative of $\sin(x)$?"
+                  placeholder="Например: Чему равна производная $\sin(x)$?"
                   className="w-full px-3.5 py-2 text-sm rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 font-sans"
                 />
 
@@ -327,14 +327,14 @@ export function CardEditorModal({
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
-                    BACK (Answer / Definition / $$Math$$) *
+                    ОБРАТНАЯ СТОРОНА (Ответ / Определение / $$Формула$$) *
                   </label>
                   <div className="flex items-center space-x-2">
                     <button
                       type="button"
                       onClick={() => speakText(back, { lang: backLang })}
                       className="p-1 text-zinc-400 hover:text-indigo-500"
-                      title="Test Audio Pronunciation"
+                      title="Проверить произношение"
                     >
                       <Volume2 className="w-3.5 h-3.5" />
                     </button>
@@ -344,7 +344,7 @@ export function CardEditorModal({
                       className="text-xs text-indigo-500 hover:underline flex items-center space-x-1"
                     >
                       <ImageIcon className="w-3.5 h-3.5" />
-                      <span>{backImage ? "Change Image" : "Add Image"}</span>
+                      <span>{backImage ? "Заменить изображение" : "Добавить изображение"}</span>
                     </button>
                     <input
                       type="file"
@@ -360,7 +360,7 @@ export function CardEditorModal({
                   rows={3}
                   value={back}
                   onChange={(e) => setBack(e.target.value)}
-                  placeholder="e.g. $$\frac{d}{dx}\sin(x) = \cos(x)$$"
+                  placeholder="Например: $$\frac{d}{dx}\sin(x) = \cos(x)$$"
                   className="w-full px-3.5 py-2 text-sm rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
 
@@ -385,13 +385,13 @@ export function CardEditorModal({
               {/* Hint */}
               <div>
                 <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1">
-                  Optional Hint
+                  Подсказка (необязательно)
                 </label>
                 <input
                   type="text"
                   value={hint}
                   onChange={(e) => setHint(e.target.value)}
-                  placeholder="A clue to help recall..."
+                  placeholder="Подсказка, которая поможет вспомнить ответ..."
                   className="w-full px-3 py-1.5 text-xs rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
                 />
               </div>
@@ -400,40 +400,40 @@ export function CardEditorModal({
               <div className="grid grid-cols-2 gap-3 pt-1">
                 <div>
                   <span className="text-[11px] text-zinc-500 dark:text-zinc-400 block mb-0.5">
-                    Front TTS Language
+                    Язык озвучки (Лицевая)
                   </span>
                   <select
                     value={frontLang}
                     onChange={(e) => setFrontLang(e.target.value)}
                     className="w-full px-2 py-1 text-xs rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900"
                   >
-                    <option value="en-US">English (US)</option>
-                    <option value="es-ES">Spanish (Spain)</option>
-                    <option value="es-MX">Spanish (Mexico)</option>
-                    <option value="fr-FR">French</option>
-                    <option value="de-DE">German</option>
-                    <option value="ja-JP">Japanese</option>
-                    <option value="zh-CN">Chinese (Mandarin)</option>
-                    <option value="ru-RU">Russian</option>
+                    <option value="ru-RU">Русский (ru-RU)</option>
+                    <option value="en-US">Английский (США)</option>
+                    <option value="es-ES">Испанский (Испания)</option>
+                    <option value="es-MX">Испанский (Мексика)</option>
+                    <option value="fr-FR">Французский</option>
+                    <option value="de-DE">Немецкий</option>
+                    <option value="ja-JP">Японский</option>
+                    <option value="zh-CN">Китайский</option>
                   </select>
                 </div>
                 <div>
                   <span className="text-[11px] text-zinc-500 dark:text-zinc-400 block mb-0.5">
-                    Back TTS Language
+                    Язык озвучки (Обратная)
                   </span>
                   <select
                     value={backLang}
                     onChange={(e) => setBackLang(e.target.value)}
                     className="w-full px-2 py-1 text-xs rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900"
                   >
-                    <option value="en-US">English (US)</option>
-                    <option value="es-ES">Spanish (Spain)</option>
-                    <option value="es-MX">Spanish (Mexico)</option>
-                    <option value="fr-FR">French</option>
-                    <option value="de-DE">German</option>
-                    <option value="ja-JP">Japanese</option>
-                    <option value="zh-CN">Chinese (Mandarin)</option>
-                    <option value="ru-RU">Russian</option>
+                    <option value="ru-RU">Русский (ru-RU)</option>
+                    <option value="en-US">Английский (США)</option>
+                    <option value="es-ES">Испанский (Испания)</option>
+                    <option value="es-MX">Испанский (Мексика)</option>
+                    <option value="fr-FR">Французский</option>
+                    <option value="de-DE">Немецкий</option>
+                    <option value="ja-JP">Японский</option>
+                    <option value="zh-CN">Китайский</option>
                   </select>
                 </div>
               </div>
@@ -447,14 +447,14 @@ export function CardEditorModal({
             onClick={onClose}
             className="px-4 py-2 text-sm font-medium rounded-lg text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition"
           >
-            Cancel
+            Отмена
           </button>
           <button
             onClick={handleSave}
             disabled={imageCompressing}
             className="px-4 py-2 text-sm font-medium rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm transition disabled:opacity-50"
           >
-            {cardToEdit ? "Save Changes" : "Add Card"}
+            {cardToEdit ? "Сохранить изменения" : "Добавить карточку"}
           </button>
         </div>
       </div>

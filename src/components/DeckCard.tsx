@@ -31,7 +31,7 @@ export function DeckCard({ deck, userId, onSelect }: DeckCardProps) {
 
   const handleDelete = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (confirm(`Delete deck "${deck.title}" and its cards?`)) {
+    if (confirm(`Удалить колоду «${deck.title}» и все её карточки?`)) {
       await deleteDeckCascade(deck.id);
     }
   };
@@ -59,14 +59,14 @@ export function DeckCard({ deck, userId, onSelect }: DeckCardProps) {
               href={`/deck/${deck.id}/edit`}
               onClick={(e) => e.stopPropagation()}
               className="text-zinc-400 hover:text-indigo-500 p-1 rounded-lg"
-              title="Edit Deck"
+              title="Редактировать колоду"
             >
               <Edit className="w-4 h-4" />
             </Link>
             <button
               onClick={handleDelete}
               className="text-zinc-400 hover:text-red-500 p-1 rounded-lg"
-              title="Delete Deck"
+              title="Удалить колоду"
             >
               <Trash2 className="w-4 h-4" />
             </button>
@@ -88,17 +88,17 @@ export function DeckCard({ deck, userId, onSelect }: DeckCardProps) {
       <div className="pt-4 mt-4 border-t border-zinc-100 dark:border-zinc-800/80 flex items-center justify-between text-xs">
         <div className="flex items-center space-x-1.5 text-zinc-500 font-medium">
           <Layers className="w-3.5 h-3.5" />
-          <span>{cardCount ?? 0} cards</span>
+          <span>{cardCount ?? 0} карт.</span>
         </div>
 
         {stats && stats.dueTotal > 0 ? (
           <span className="flex items-center space-x-1 px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 font-bold border border-amber-500/20 text-[11px]">
             <Clock className="w-3 h-3" />
-            <span>{stats.dueTotal} Due</span>
+            <span>{stats.dueTotal} к повторению</span>
           </span>
         ) : (
           <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">
-            Up to date
+            Повторено
           </span>
         )}
       </div>

@@ -216,7 +216,7 @@ export function LearnMode({ deck, cards, userId, onExit }: LearnModeProps) {
   if (loading) {
     return (
       <div className="py-20 text-center text-zinc-500">
-        Loading spaced repetition queue...
+        Загрузка очереди интервального повторения...
       </div>
     );
   }
@@ -231,10 +231,10 @@ export function LearnMode({ deck, cards, userId, onExit }: LearnModeProps) {
 
         <div className="space-y-2">
           <h2 className="text-2xl font-black text-zinc-900 dark:text-white">
-            Session Completed!
+            Сессия завершена!
           </h2>
           <p className="text-sm text-zinc-500 dark:text-zinc-400">
-            Great job! You reviewed your queue and scheduled future retention dates.
+            Отличная работа! Вы прошли всю очередь карточек и запланировали даты будущих повторений.
           </p>
         </div>
 
@@ -243,13 +243,13 @@ export function LearnMode({ deck, cards, userId, onExit }: LearnModeProps) {
             <div className="text-2xl font-black text-indigo-600 dark:text-indigo-400">
               {accuracy}%
             </div>
-            <div className="text-xs text-zinc-500">First-pass Accuracy</div>
+            <div className="text-xs text-zinc-500">Точность с первой попытки</div>
           </div>
           <div>
             <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400">
               {correctCount}
             </div>
-            <div className="text-xs text-zinc-500">Cards Mastered</div>
+            <div className="text-xs text-zinc-500">Карточек освоено</div>
           </div>
         </div>
 
@@ -264,13 +264,13 @@ export function LearnMode({ deck, cards, userId, onExit }: LearnModeProps) {
             className="flex items-center space-x-2 px-4 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-sm font-semibold transition"
           >
             <RotateCw className="w-4 h-4" />
-            <span>Practice More</span>
+            <span>Тренироваться еще</span>
           </button>
           <button
             onClick={onExit}
             className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold shadow-sm transition"
           >
-            Back to Deck
+            Назад к колоде
           </button>
         </div>
       </div>
@@ -288,7 +288,7 @@ export function LearnMode({ deck, cards, userId, onExit }: LearnModeProps) {
           className="flex items-center space-x-1.5 text-xs font-medium text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition"
         >
           <ArrowLeft className="w-4 h-4" />
-          <span>Exit Learn</span>
+          <span>Выйти из режима</span>
         </button>
 
         <div className="flex items-center space-x-3">
@@ -313,11 +313,11 @@ export function LearnMode({ deck, cards, userId, onExit }: LearnModeProps) {
           {streak > 1 && (
             <div className="flex items-center space-x-1 px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 text-xs font-bold border border-amber-500/20 animate-pulse">
               <Flame className="w-3.5 h-3.5 fill-current" />
-              <span>{streak} Streak</span>
+              <span>Серия: {streak}</span>
             </div>
           )}
           <span className="text-xs font-semibold text-zinc-500">
-            {queue.length} left in queue
+            Осталось в очереди: {queue.length}
           </span>
         </div>
       </div>
@@ -341,7 +341,7 @@ export function LearnMode({ deck, cards, userId, onExit }: LearnModeProps) {
           </div>
           {currentQuestion.card.hint && (
             <span className="text-amber-600 dark:text-amber-400 italic">
-              Hint: {currentQuestion.card.hint}
+              Подсказка: {currentQuestion.card.hint}
             </span>
           )}
         </div>
@@ -420,7 +420,7 @@ export function LearnMode({ deck, cards, userId, onExit }: LearnModeProps) {
             disabled={isAnswered}
             value={writtenAnswer}
             onChange={(e) => setWrittenAnswer(e.target.value)}
-            placeholder="Type your answer here..."
+            placeholder="Введите ответ здесь..."
             className="w-full p-4 rounded-2xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-white text-base focus:outline-none focus:ring-2 focus:ring-indigo-500"
             autoFocus
           />
@@ -430,7 +430,7 @@ export function LearnMode({ deck, cards, userId, onExit }: LearnModeProps) {
               disabled={!writtenAnswer.trim()}
               className="w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold shadow-sm transition disabled:opacity-50"
             >
-              Check Answer
+              Проверить ответ
             </button>
           )}
         </form>
@@ -451,14 +451,14 @@ export function LearnMode({ deck, cards, userId, onExit }: LearnModeProps) {
                 <>
                   <CheckCircle className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                   <span className="text-emerald-700 dark:text-emerald-300">
-                    Correct! FSRS scheduled forward
+                    Верно! Дата повторения перенесена вперед
                   </span>
                 </>
               ) : (
                 <>
                   <XCircle className="w-4 h-4 text-red-600 dark:text-red-400" />
                   <span className="text-red-700 dark:text-red-300">
-                    Not quite! Re-queued for review
+                    Не совсем! Карточка вернется в конец очереди
                   </span>
                 </>
               )}
@@ -466,7 +466,7 @@ export function LearnMode({ deck, cards, userId, onExit }: LearnModeProps) {
             {!isCorrect && (
               <div className="text-xs text-zinc-700 dark:text-zinc-300 space-y-1">
                 <div>
-                  <span className="font-semibold">Correct Answer: </span>
+                  <span className="font-semibold">Правильный ответ: </span>
                   <MarkdownMath content={currentQuestion.correctAnswer} />
                 </div>
                 {currentQuestion.isCloze && (
@@ -486,7 +486,7 @@ export function LearnMode({ deck, cards, userId, onExit }: LearnModeProps) {
             onClick={handleProceedNext}
             className="flex items-center space-x-1 px-5 py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 dark:bg-white dark:hover:bg-zinc-200 text-white dark:text-zinc-900 text-sm font-semibold transition shrink-0"
           >
-            <span>Continue</span>
+            <span>Продолжить</span>
             <ArrowRight className="w-4 h-4" />
           </button>
         </div>
