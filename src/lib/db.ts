@@ -153,6 +153,82 @@ export async function deleteDeckCascade(deckId: string): Promise<void> {
  * Seed sample starter decks if the database is completely empty.
  */
 export async function seedSampleDataIfEmpty(): Promise<void> {
+  // 1. Auto-migrate legacy English sample decks if present in local IndexedDB
+  try {
+    const legacyMathDeck = await db.decks.where("title").equals("Essential Math & Physics Formulas").first();
+    if (legacyMathDeck) {
+      await db.decks.update(legacyMathDeck.id, {
+        title: "Основные формулы математики и физики",
+        description: "Формулы математического анализа, алгебры и физики с KaTeX-рендерингом.",
+        tags: ["Математика", "Физика", "Точные науки"],
+      });
+      const mathCards = await db.cards.where("deckId").equals(legacyMathDeck.id).toArray();
+      for (const card of mathCards) {
+        if (card.term.includes("Quadratic Formula")) {
+          await db.cards.update(card.id, {
+            term: "Формула корней квадратного уравнения ($ax^2 + bx + c = 0$)",
+            definition: "$$x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}$$\n\nГде $\\Delta = b^2 - 4ac$ — дискриминант уравнения.",
+            front: "Формула корней квадратного уравнения ($ax^2 + bx + c = 0$)",
+            back: "$$x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}$$\n\nГде $\\Delta = b^2 - 4ac$ — дискриминант уравнения.",
+            hint: "Помните про знак $\\pm$ и дискриминант под корнем.",
+          });
+        } else if (card.term.includes("Euler's Identity")) {
+          await db.cards.update(card.id, {
+            term: "Тождество Эйлера",
+            definition: "$$e^{i\\pi} + 1 = 0$$\n\nСвязывает пять фундаментальных констант: $e, i, \\pi, 1, 0$.",
+            front: "Тождество Эйлера",
+            back: "$$e^{i\\pi} + 1 = 0$$\n\nСвязывает пять фундаментальных констант: $e, i, \\pi, 1, 0$.",
+            hint: "Связывает экспоненциальные и тригонометрические значения при угле $\\pi$.",
+          });
+        } else if (card.term.includes("Einstein's Mass-Energy")) {
+          await db.cards.update(card.id, {
+            term: "Эквивалентность массы и энергии Эйнштейна",
+            definition: "$$E = mc^2$$\n\nГде $E$ — энергия, $m$ — масса, а $c \\approx 3 \\times 10^8\\text{ м/с}$ — скорость света.",
+            front: "Эквивалентность массы и энергии Эйнштейна",
+            back: "$$E = mc^2$$\n\nГде $E$ — энергия, $m$ — масса, а $c \\approx 3 \\times 10^8\\text{ м/с}$ — скорость света.",
+          });
+        }
+      }
+    }
+
+    const legacySpanishDeck = await db.decks.where("title").equals("Spanish Travel & Conversation").first();
+    if (legacySpanishDeck) {
+      await db.decks.update(legacySpanishDeck.id, {
+        title: "Испанский разговорник для путешествий",
+        description: "Популярные разговорные фразы с озвучкой произношения Web Speech.",
+        tags: ["Испанский", "Языки", "Путешествия"],
+      });
+      const spanishCards = await db.cards.where("deckId").equals(legacySpanishDeck.id).toArray();
+      for (const card of spanishCards) {
+        if (card.term.includes("nearest train station")) {
+          await db.cards.update(card.id, {
+            term: "Где находится ближайший железнодорожный вокзал?",
+            front: "Где находится ближайший железнодорожный вокзал?",
+            hint: "Фраза для поиска транспорта в городе.",
+            frontLang: "ru-RU",
+          });
+        } else if (card.term.includes("bring me the bill")) {
+          await db.cards.update(card.id, {
+            term: "Не могли бы вы принести счёт, пожалуйста?",
+            front: "Не могли бы вы принести счёт, пожалуйста?",
+            hint: "Вежливая просьба в ресторане или кафе.",
+            frontLang: "ru-RU",
+          });
+        } else if (card.term.includes("table for two")) {
+          await db.cards.update(card.id, {
+            term: "Я хотел бы заказать столик на двоих.",
+            front: "Я хотел бы заказать столик на двоих.",
+            hint: "Бронирование в ресторане.",
+            frontLang: "ru-RU",
+          });
+        }
+      }
+    }
+  } catch (err) {
+    console.warn("Migration of legacy sample decks skipped:", err);
+  }
+
+  // 2. If completely empty, insert Russian starter decks
   const count = await db.decks.count();
   if (count > 0) return;
 
