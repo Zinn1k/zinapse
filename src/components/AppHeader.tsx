@@ -21,6 +21,7 @@ import {
   subscribeToAuthChanges,
   signOutUser,
   isFirebaseConfigured,
+  handleRedirectResult,
 } from "@/lib/firebase";
 import { subscribeSyncState, triggerFullSync, type SyncState } from "@/lib/sync";
 import { db, GUEST_USER_ID } from "@/lib/db";
@@ -59,6 +60,9 @@ export function AppHeader({
       setIsDark(true);
       document.documentElement.classList.add("dark");
     }
+
+    // Handle redirect result if user returned from Google redirect auth
+    handleRedirectResult().catch(() => {});
 
     const unsubAuth = subscribeToAuthChanges(async (firebaseUser) => {
       setUser(firebaseUser);

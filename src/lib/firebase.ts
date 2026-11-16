@@ -3,6 +3,8 @@ import {
   getAuth,
   GoogleAuthProvider,
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   signInAnonymously,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
@@ -75,7 +77,7 @@ if (typeof window !== "undefined" && isFirebaseConfigured()) {
 export { app, auth, dbFirestore };
 
 /**
- * 1-click Google Sign-in
+ * 1-click Google Sign-in with automatic redirect fallback
  */
 export async function signInWithGoogle(): Promise<User | null> {
   if (!auth) {
@@ -85,8 +87,36 @@ export async function signInWithGoogle(): Promise<User | null> {
   }
   const provider = new GoogleAuthProvider();
   provider.setCustomParameters({ prompt: "select_account" });
-  const credential = await signInWithPopup(auth, provider);
-  return credential.user;
+  try {
+    const credential = await signInWithPopup(auth, provider);
+    return credential.user;
+  } catch (err: unknown) {
+    const code =
+      err && typeof err === "object" && "code" in err ? String(err.code) : "";
+    // If popup is blocked by browser, mobile WebView, or cancelled, fallback to full redirect
+    if (
+      code === "auth/popup-blocked" ||
+      code === "auth/cancelled-popup-request"
+    ) {
+      await signInWithRedirect(auth, provider);
+      return null;
+    }
+    throw err;
+  }
+}
+
+/**
+ * Handle pending redirect authentication result on page load
+ */
+export async function handleRedirectResult(): Promise<User | null> {
+  if (!auth) return null;
+  try {
+    const result = await getRedirectResult(auth);
+    return result?.user ?? null;
+  } catch (error) {
+    console.warn("Failed to get redirect auth result:", error);
+    throw error;
+  }
 }
 
 /**
@@ -186,6 +216,14 @@ export function getFirebaseErrorMessage(err: unknown): string {
       return "Слишком много неудачных попыток входа. Попробуйте позже или сбросьте пароль.";
     case "auth/popup-closed-by-user":
       return "Окно входа Google было закрыто до завершения авторизации.";
+    case "auth/popup-blocked":
+      return "Всплывающее окно для входа через Google было заблокировано браузером. Пожалуйста, разрешите всплывающие окна или используйте вход по email.";
+    case "auth/cancelled-popup-request":
+      return "Запрос авторизации был перезапущен. Попробуйте снова.";
+    case "auth/account-exists-with-different-credential":
+      return "Пользователь с таким адресом уже зарегистрирован другим способом. Попробуйте войти по паролю.";
+    case "auth/unauthorized-domain":
+      return "Домен текущего приложения не добавлен в список доверенных доменов (Authorized domains) в Firebase Console. Перейдите в Firebase Console -> Authentication -> Settings -> Authorized domains и добавьте домен текущего сайта (например, zinapse.vercel.app).";
     case "auth/network-request-failed":
       return "Ошибка сети. Проверьте интернет-соединение.";
     default:

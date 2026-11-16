@@ -72,12 +72,16 @@ export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
         setIsLoading(false);
         return;
       }
-      await signInWithGoogle();
-      setSuccessMessage("Успешный вход через Google!");
-      setTimeout(() => {
-        onSuccess?.();
-        onClose();
-      }, 700);
+      const user = await signInWithGoogle();
+      if (user) {
+        setSuccessMessage("Успешный вход через Google!");
+        setTimeout(() => {
+          onSuccess?.();
+          onClose();
+        }, 700);
+      } else {
+        setSuccessMessage("Перенаправление на страницу входа Google...");
+      }
     } catch (err: unknown) {
       setError(getFirebaseErrorMessage(err));
     } finally {
