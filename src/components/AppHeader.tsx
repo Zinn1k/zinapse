@@ -16,9 +16,9 @@ import {
   CheckCircle,
 } from "lucide-react";
 import { ZinapseLogo } from "@/components/ZinapseLogo";
+import { AuthModal } from "@/components/AuthModal";
 import {
   subscribeToAuthChanges,
-  signInWithGoogle,
   signOutUser,
   isFirebaseConfigured,
 } from "@/lib/firebase";
@@ -47,6 +47,7 @@ export function AppHeader({
     error: null,
   });
   const [isDark, setIsDark] = useState<boolean>(true);
+  const [isAuthOpen, setIsAuthOpen] = useState<boolean>(false);
 
   useEffect(() => {
     // Sync theme with document element
@@ -93,15 +94,6 @@ export function AppHeader({
   const handleManualSync = async () => {
     if (user) {
       await triggerFullSync(user.uid);
-    }
-  };
-
-  const handleGoogleSignIn = async () => {
-    try {
-      await signInWithGoogle();
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Ошибка входа через Google";
-      alert(msg);
     }
   };
 
@@ -203,20 +195,21 @@ export function AppHeader({
               <button
                 onClick={handleSignOut}
                 className="p-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-900 text-zinc-500 hover:text-red-500 transition"
-                title="Выйти"
+                title="Выйти из аккаунта"
               >
                 <LogOut className="w-4 h-4" />
               </button>
             </div>
-          ) : isFirebaseConfigured() ? (
+          ) : (
             <button
-              onClick={handleGoogleSignIn}
-              className="flex items-center space-x-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-800 dark:text-zinc-200 transition"
+              onClick={() => setIsAuthOpen(true)}
+              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-800 dark:text-zinc-200 border border-zinc-200 dark:border-zinc-700 shadow-sm transition active:scale-95"
+              title="Войти или создать аккаунт для синхронизации"
             >
-              <LogIn className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Войти</span>
+              <LogIn className="w-3.5 h-3.5 text-indigo-500" />
+              <span>Войти</span>
             </button>
-          ) : null}
+          )}
 
           {/* Theme Toggle */}
           <button
@@ -237,6 +230,9 @@ export function AppHeader({
           </button>
         </div>
       </div>
+
+      {/* Account Authentication & Registration Modal */}
+      <AuthModal isOpen={isAuthOpen} onClose={() => setIsAuthOpen(false)} />
     </header>
   );
 }

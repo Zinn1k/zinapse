@@ -4,6 +4,10 @@ import {
   GoogleAuthProvider,
   signInWithPopup,
   signInAnonymously,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  sendPasswordResetEmail,
+  updateProfile,
   signOut as firebaseSignOut,
   onAuthStateChanged,
   type Auth,
@@ -90,6 +94,93 @@ export async function signInAsGuest(): Promise<User | null> {
 export async function signOutUser(): Promise<void> {
   if (auth) {
     await firebaseSignOut(auth);
+  }
+}
+
+/**
+ * Email & Password Registration
+ */
+export async function signUpWithEmail(
+  email: string,
+  pass: string,
+  displayName?: string
+): Promise<User> {
+  if (!auth) {
+    throw new Error(
+      "Firebase не настроен. Добавьте ключи NEXT_PUBLIC_FIREBASE_* в .env.local"
+    );
+  }
+  const credential = await createUserWithEmailAndPassword(auth, email.trim(), pass);
+  if (displayName && displayName.trim()) {
+    try {
+      await updateProfile(credential.user, { displayName: displayName.trim() });
+    } catch {
+      // ignore
+    }
+  }
+  return credential.user;
+}
+
+/**
+ * Email & Password Sign-in
+ */
+export async function signInWithEmail(
+  email: string,
+  pass: string
+): Promise<User> {
+  if (!auth) {
+    throw new Error(
+      "Firebase не настроен. Добавьте ключи NEXT_PUBLIC_FIREBASE_* в .env.local"
+    );
+  }
+  const credential = await signInWithEmailAndPassword(auth, email.trim(), pass);
+  return credential.user;
+}
+
+/**
+ * Send Password Reset Email
+ */
+export async function sendResetPassword(email: string): Promise<void> {
+  if (!auth) {
+    throw new Error(
+      "Firebase не настроен. Добавьте ключи NEXT_PUBLIC_FIREBASE_* в .env.local"
+    );
+  }
+  await sendPasswordResetEmail(auth, email.trim());
+}
+
+/**
+ * Maps Firebase auth error codes to friendly Russian error messages
+ */
+export function getFirebaseErrorMessage(err: unknown): string {
+  if (!err || typeof err !== "object") return "Произошла неизвестная ошибка.";
+  const code = "code" in err ? String(err.code) : "";
+  const message = "message" in err ? String(err.message) : "";
+
+  switch (code) {
+    case "auth/email-already-in-use":
+      return "Пользователь с таким email уже зарегистрирован. Попробуйте войти.";
+    case "auth/invalid-email":
+      return "Введён некорректный адрес электронной почты.";
+    case "auth/operation-not-allowed":
+      return "Этот метод входа отключён в настройках проекта Firebase.";
+    case "auth/weak-password":
+      return "Пароль слишком простой. Придумайте пароль длиной не менее 6 символов.";
+    case "auth/user-disabled":
+      return "Данная учётная запись заблокирована администратором.";
+    case "auth/user-not-found":
+      return "Пользователь с таким email не найден.";
+    case "auth/wrong-password":
+    case "auth/invalid-credential":
+      return "Неверный email или пароль.";
+    case "auth/too-many-requests":
+      return "Слишком много неудачных попыток входа. Попробуйте позже или сбросьте пароль.";
+    case "auth/popup-closed-by-user":
+      return "Окно входа Google было закрыто до завершения авторизации.";
+    case "auth/network-request-failed":
+      return "Ошибка сети. Проверьте интернет-соединение.";
+    default:
+      return message || "Ошибка при обращении к сервису авторизации.";
   }
 }
 
