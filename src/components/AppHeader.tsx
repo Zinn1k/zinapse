@@ -23,7 +23,7 @@ import {
   isFirebaseConfigured,
 } from "@/lib/firebase";
 import { subscribeSyncState, triggerFullSync, type SyncState } from "@/lib/sync";
-import { GUEST_USER_ID } from "@/lib/db";
+import { db, GUEST_USER_ID } from "@/lib/db";
 import type { User } from "firebase/auth";
 
 interface AppHeaderProps {
@@ -60,10 +60,28 @@ export function AppHeader({
       document.documentElement.classList.add("dark");
     }
 
-    const unsubAuth = subscribeToAuthChanges((firebaseUser) => {
+    const unsubAuth = subscribeToAuthChanges(async (firebaseUser) => {
       setUser(firebaseUser);
       if (firebaseUser) {
         setCurrentUserId(firebaseUser.uid);
+        try {
+          // Adopt guest decks into user's account for cloud sync
+          const guestDecks = await db.decks.where("ownerId").equals(GUEST_USER_ID).toArray();
+          for (const gd of guestDecks) {
+            await db.decks.update(gd.id, { ownerId: firebaseUser.uid, userId: firebaseUser.uid });
+            await db.sync_queue.put({
+              id: `deck_${gd.id}`,
+              collection: "decks",
+              docId: gd.id,
+              action: "upsert",
+              payload: { ...gd, ownerId: firebaseUser.uid, userId: firebaseUser.uid },
+              timestamp: Date.now(),
+              attempts: 0,
+            });
+          }
+        } catch {
+          // ignore
+        }
         // Automatically sync cloud decks down and upload local queue
         triggerFullSync(firebaseUser.uid).catch(() => {});
       } else {

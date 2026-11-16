@@ -23,19 +23,28 @@ import {
 
 // Firebase config from environment variables (Spark Plan friendly: Auth + Firestore only, zero paid storage)
 const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+  apiKey:
+    process.env.NEXT_PUBLIC_FIREBASE_API_KEY ||
+    "AIzaSyBhnWVHHIYQumlXLj_r146sVP_q8JsUeFA",
+  authDomain:
+    process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN ||
+    "zinapse-b4d7a.firebaseapp.com",
+  projectId:
+    process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ||
+    "zinapse-b4d7a",
+  storageBucket:
+    process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET ||
+    "zinapse-b4d7a.firebasestorage.app",
+  messagingSenderId:
+    process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID ||
+    "88469881505",
+  appId:
+    process.env.NEXT_PUBLIC_FIREBASE_APP_ID ||
+    "1:88469881505:web:3634e1caec75846cca66e0",
 };
 
 export function isFirebaseConfigured(): boolean {
-  return Boolean(
-    process.env.NEXT_PUBLIC_FIREBASE_API_KEY &&
-      process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID
-  );
+  return Boolean(firebaseConfig.apiKey && firebaseConfig.projectId);
 }
 
 let app: FirebaseApp | null = null;

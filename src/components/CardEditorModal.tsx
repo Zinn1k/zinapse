@@ -8,8 +8,9 @@ import {
   Eye,
   Check,
 } from "lucide-react";
-import { db, type Card } from "@/lib/db";
+import { db, type Card, GUEST_USER_ID } from "@/lib/db";
 import { generateId } from "@/lib/utils";
+import { scheduleSync } from "@/lib/sync";
 import { compressImageToWebP } from "@/lib/image-compression";
 import { speakText } from "@/lib/speech";
 import { MarkdownMath } from "./MarkdownMath";
@@ -109,8 +110,11 @@ export function CardEditorModal({
     const now = Date.now();
     const cardId = cardToEdit ? cardToEdit.id : generateId();
 
+    let savedCard: Card;
+
     if (cardToEdit) {
-      await db.cards.update(cardId, {
+      savedCard = {
+        ...cardToEdit,
         term: front.trim(),
         definition: back.trim(),
         front: front.trim(),
@@ -122,7 +126,8 @@ export function CardEditorModal({
         frontLang,
         backLang,
         updatedAt: now,
-      });
+      };
+      await db.cards.put(savedCard);
     } else {
       const maxOrderCard = await db.cards
         .where("deckId")
@@ -131,7 +136,7 @@ export function CardEditorModal({
         .sortBy("order");
       const nextOrder = (maxOrderCard[0]?.order ?? 0) + 1;
 
-      const newCard: Card = {
+      savedCard = {
         id: cardId,
         deckId,
         term: front.trim(),
@@ -149,7 +154,23 @@ export function CardEditorModal({
         updatedAt: now,
       };
 
-      await db.cards.add(newCard);
+      await db.cards.add(savedCard);
+    }
+
+    await db.sync_queue.put({
+      id: `card_${savedCard.id}`,
+      collection: "cards",
+      docId: savedCard.id,
+      action: "upsert",
+      payload: savedCard,
+      timestamp: now,
+      attempts: 0,
+    });
+
+    // Check deck owner to schedule sync
+    const deck = await db.decks.get(deckId);
+    if (deck?.ownerId && deck.ownerId !== GUEST_USER_ID) {
+      scheduleSync(deck.ownerId);
     }
 
     if (onSaved) {

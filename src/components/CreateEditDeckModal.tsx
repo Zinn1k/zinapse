@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { db, type Deck, type Card, GUEST_USER_ID } from "@/lib/db";
 import { generateId, generateShareCode } from "@/lib/utils";
+import { scheduleSync } from "@/lib/sync";
 
 interface CreateEditDeckModalProps {
   isOpen: boolean;
@@ -81,15 +82,19 @@ export function CreateEditDeckModal({
     const now = Date.now();
     const deckId = deckToEdit ? deckToEdit.id : generateId();
 
+    let savedDeck: Deck;
+
     if (deckToEdit) {
-      await db.decks.update(deckId, {
+      savedDeck = {
+        ...deckToEdit,
         title: title.trim(),
         description: description.trim(),
         tags,
         updatedAt: now,
-      });
+      };
+      await db.decks.put(savedDeck);
     } else {
-      const newDeck: Deck = {
+      savedDeck = {
         id: deckId,
         ownerId: userId || GUEST_USER_ID,
         userId: userId || GUEST_USER_ID,
@@ -101,8 +106,18 @@ export function CreateEditDeckModal({
         createdAt: now,
         updatedAt: now,
       };
-      await db.decks.add(newDeck);
+      await db.decks.add(savedDeck);
     }
+
+    await db.sync_queue.put({
+      id: `deck_${deckId}`,
+      collection: "decks",
+      docId: deckId,
+      action: "upsert",
+      payload: savedDeck,
+      timestamp: now,
+      attempts: 0,
+    });
 
     // Process Batch Import if text provided
     if (importMode && importText.trim()) {
@@ -115,7 +130,7 @@ export function CreateEditDeckModal({
         if (parts.length >= 2 && parts[0].trim() && parts[1].trim()) {
           const term = parts[0].trim();
           const definition = parts.slice(1).join(termSeparator).trim();
-          newCards.push({
+          const cardObj: Card = {
             id: generateId(),
             deckId,
             term,
@@ -125,6 +140,16 @@ export function CreateEditDeckModal({
             order: order++,
             createdAt: now,
             updatedAt: now,
+          };
+          newCards.push(cardObj);
+          await db.sync_queue.put({
+            id: `card_${cardObj.id}`,
+            collection: "cards",
+            docId: cardObj.id,
+            action: "upsert",
+            payload: cardObj,
+            timestamp: now,
+            attempts: 0,
           });
         }
       }
@@ -132,6 +157,10 @@ export function CreateEditDeckModal({
       if (newCards.length > 0) {
         await db.cards.bulkAdd(newCards);
       }
+    }
+
+    if (savedDeck.ownerId && savedDeck.ownerId !== GUEST_USER_ID) {
+      scheduleSync(savedDeck.ownerId);
     }
 
     if (onSaved) {

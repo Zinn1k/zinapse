@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { db, type Deck, type Card, GUEST_USER_ID } from "@/lib/db";
 import { generateId, generateShareCode } from "@/lib/utils";
+import { scheduleSync } from "@/lib/sync";
 import { compressImageToWebP } from "@/lib/image-compression";
 import { previewImport, type ImportPreview } from "@/lib/importer";
 import { Button } from "@/components/ui/button";
@@ -287,12 +288,38 @@ export default function EditDeckPage({
       frontImage: c.imageData,
     }));
 
-    await db.transaction("rw", [db.decks, db.cards], async () => {
+    await db.transaction("rw", [db.decks, db.cards, db.sync_queue], async () => {
       await db.decks.put(deckData);
+      await db.sync_queue.put({
+        id: `deck_${deckData.id}`,
+        collection: "decks",
+        docId: deckData.id,
+        action: "upsert",
+        payload: deckData,
+        timestamp: now,
+        attempts: 0,
+      });
+
       // Replace deck cards
       await db.cards.where("deckId").equals(deckId).delete();
       await db.cards.bulkPut(cardsData);
+
+      for (const card of cardsData) {
+        await db.sync_queue.put({
+          id: `card_${card.id}`,
+          collection: "cards",
+          docId: card.id,
+          action: "upsert",
+          payload: card,
+          timestamp: now,
+          attempts: 0,
+        });
+      }
     });
+
+    if (deckData.ownerId && deckData.ownerId !== GUEST_USER_ID) {
+      scheduleSync(deckData.ownerId);
+    }
 
     setIsSaving(false);
     router.push("/");
