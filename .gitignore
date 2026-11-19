@@ -48,6 +48,11 @@ next-env.d.ts
 android/.gradle/
 android/build/
 android/app/build/
+
+# Backup archives
+zinapse-source.zip
+zinapse-debug.apk
+
 android/local.properties
 android/.idea/
 *.apk

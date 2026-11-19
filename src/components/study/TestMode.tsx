@@ -1,359 +1,1128 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
-  FileCheck,
+  ArrowLeft,
   CheckCircle,
   XCircle,
-  ArrowLeft,
-  RotateCw,
-  Award,
+  AlertCircle,
+  RotateCcw,
+  ClipboardCheck,
+  ArrowRight,
+  Filter,
 } from "lucide-react";
-import { type Card, type Deck } from "@/lib/db";
-import { MarkdownMath } from "../MarkdownMath";
 import confetti from "canvas-confetti";
+import { type Card as DbCard, type Deck } from "@/lib/db";
+import { checkAnswerWithFuzzy } from "@/lib/levenshtein";
+import { MarkdownMath } from "../MarkdownMath";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Card as UICard, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
+import { Switch } from "@/components/ui/switch";
+import { Input } from "@/components/ui/input";
 
-interface TestModeProps {
+export type QuestionType = "multiple_choice" | "true_false" | "written" | "matching";
+
+export interface BaseQuestion {
+  id: string;
+  cardId: string;
+  type: QuestionType;
+}
+
+export interface MultipleChoiceQuestion extends BaseQuestion {
+  type: "multiple_choice";
+  prompt: string;
+  imageData?: string;
+  options: string[];
+  correctAnswer: string;
+}
+
+export interface TrueFalseQuestion extends BaseQuestion {
+  type: "true_false";
+  term: string;
+  displayedDefinition: string;
+  actualDefinition: string;
+  isCorrectMatch: boolean;
+}
+
+export interface WrittenQuestion extends BaseQuestion {
+  type: "written";
+  prompt: string;
+  imageData?: string;
+  expectedTerm: string;
+}
+
+export interface MatchingQuestion extends BaseQuestion {
+  type: "matching";
+  pairs: {
+    cardId: string;
+    term: string;
+    definition: string;
+  }[];
+  shuffledDefinitions: { id: string; text: string }[];
+}
+
+export type Question =
+  | MultipleChoiceQuestion
+  | TrueFalseQuestion
+  | WrittenQuestion
+  | MatchingQuestion;
+
+export interface UserAnswer {
+  questionId: string;
+  answer: unknown;
+  isCorrect?: boolean;
+  score?: number;
+}
+
+export interface TestModeProps {
   deck: Deck;
-  cards: Card[];
+  cards: DbCard[];
+  userId?: string;
   onExit: () => void;
 }
 
-interface TestQuestion {
-  id: string;
-  card: Card;
-  type: "choice" | "true_false" | "written";
-  prompt: string;
-  correctAnswer: string;
-  options?: string[];
-  isTrue?: boolean;
-}
+export function TestMode({ deck, cards: allCards, onExit }: TestModeProps) {
+  // Setup options
+  const [isConfiguring, setIsConfiguring] = useState(true);
+  const [questionCount, setQuestionCount] = useState<number | "all">(10);
+  const [enabledTypes, setEnabledTypes] = useState<Record<QuestionType, boolean>>({
+    multiple_choice: true,
+    true_false: true,
+    written: true,
+    matching: true,
+  });
 
-export function TestMode({ deck, cards, onExit }: TestModeProps) {
-  const [questions, setQuestions] = useState<TestQuestion[]>([]);
-  const [userAnswers, setUserAnswers] = useState<Record<string, string>>({});
+  // Test session state
+  const [questions, setQuestions] = useState<Question[]>([]);
+  const [currentIdx, setCurrentIdx] = useState(0);
+  const [userAnswers, setUserAnswers] = useState<Record<string, UserAnswer>>({});
   const [isSubmitted, setIsSubmitted] = useState(false);
-  const [score, setScore] = useState<{ correct: number; total: number; percent: number } | null>(
-    null
-  );
+  const [filterOnlyMistakes, setFilterOnlyMistakes] = useState(false);
 
-  const initTest = React.useCallback(() => {
-    const testQuestions: TestQuestion[] = [];
-    const shuffled = [...cards].sort(() => Math.random() - 0.5);
-
-    shuffled.forEach((c, idx) => {
-      // Alternate question types
-      const typeIndex = idx % 3;
-
-      const cardTerm = c.term || c.front || "";
-      const cardDef = c.definition || c.back || "";
-
-      if (typeIndex === 0 && cards.length >= 4) {
-        // Multiple choice
-        const distractors = cards
-          .filter((other) => other.id !== c.id)
-          .sort(() => Math.random() - 0.5)
-          .slice(0, 3)
-          .map((other) => other.definition || other.back || "");
-        const options = [...distractors, cardDef].sort(() => Math.random() - 0.5);
-
-        testQuestions.push({
-          id: `q_${c.id}_choice`,
-          card: c,
-          type: "choice",
-          prompt: cardTerm,
-          correctAnswer: cardDef,
-          options,
-        });
-      } else if (typeIndex === 1 && cards.length >= 2) {
-        // True / False
-        const isTrue = Math.random() > 0.5;
-        let displayedAnswer = cardDef;
-        if (!isTrue) {
-          const falseCard = cards.find((other) => other.id !== c.id);
-          if (falseCard) displayedAnswer = falseCard.definition || falseCard.back || "";
-        }
-
-        testQuestions.push({
-          id: `q_${c.id}_tf`,
-          card: c,
-          type: "true_false",
-          prompt: `${cardTerm}\n\n*Утверждение:* "${displayedAnswer}"`,
-          correctAnswer: isTrue ? "Верно" : "Неверно",
-          options: ["Верно", "Неверно"],
-          isTrue,
-        });
-      } else {
-        // Written answer
-        testQuestions.push({
-          id: `q_${c.id}_written`,
-          card: c,
-          type: "written",
-          prompt: cardTerm,
-          correctAnswer: cardDef,
-        });
-      }
-    });
-
-    setQuestions(testQuestions);
-    setUserAnswers({});
-    setIsSubmitted(false);
-    setScore(null);
-  }, [cards]);
-
-  React.useEffect(() => {
-    if (cards.length > 0) {
-      initTest();
+  useEffect(() => {
+    if (allCards.length < 10) {
+      setQuestionCount(allCards.length);
     }
-  }, [cards, initTest]);
+  }, [allCards.length]);
 
-  const handleSelectAnswer = (qId: string, answer: string) => {
-    if (isSubmitted) return;
-    setUserAnswers((prev) => ({ ...prev, [qId]: answer }));
+  // Generate test questions based on target card list
+  const generateQuestions = (targetCards: DbCard[]) => {
+    const availableTypes = (
+      Object.keys(enabledTypes) as QuestionType[]
+    ).filter((t) => enabledTypes[t]);
+
+    if (availableTypes.length === 0) {
+      alert("Выберите хотя бы один тип вопросов!");
+      return null;
+    }
+
+    const shuffled = [...targetCards].sort(() => 0.5 - Math.random());
+    const count =
+      questionCount === "all"
+        ? shuffled.length
+        : Math.min(questionCount, shuffled.length);
+    const selectedCards = shuffled.slice(0, count);
+
+    const generated: Question[] = [];
+
+    // Helper to get random distractors
+    const getDistractors = (excludeCardId: string, needed: number) => {
+      const otherCards = allCards.filter((c) => c.id !== excludeCardId);
+      return otherCards
+        .sort(() => 0.5 - Math.random())
+        .slice(0, needed)
+        .map((c) => c.term || c.front || "");
+    };
+
+    let typeIndex = 0;
+
+    for (let i = 0; i < selectedCards.length; i++) {
+      const card = selectedCards[i];
+      const term = card.term || card.front || "";
+      const definition = card.definition || card.back || "";
+
+      const qType = availableTypes[typeIndex % availableTypes.length];
+      typeIndex++;
+
+      if (qType === "multiple_choice") {
+        const distractors = getDistractors(card.id, 3);
+        const options = [...distractors, term].sort(() => 0.5 - Math.random());
+        generated.push({
+          id: `q_${i}_mc`,
+          cardId: card.id,
+          type: "multiple_choice",
+          prompt: definition,
+          imageData: card.imageData || card.frontImage,
+          options,
+          correctAnswer: term,
+        });
+      } else if (qType === "true_false") {
+        const isMatch = Math.random() > 0.5;
+        let displayedDef = definition;
+        if (!isMatch && allCards.length > 1) {
+          const other = allCards.find((c) => c.id !== card.id);
+          if (other) displayedDef = other.definition || other.back || "";
+        }
+        generated.push({
+          id: `q_${i}_tf`,
+          cardId: card.id,
+          type: "true_false",
+          term,
+          displayedDefinition: displayedDef,
+          actualDefinition: definition,
+          isCorrectMatch: displayedDef === definition,
+        });
+      } else if (qType === "written") {
+        generated.push({
+          id: `q_${i}_wr`,
+          cardId: card.id,
+          type: "written",
+          prompt: definition,
+          imageData: card.imageData || card.frontImage,
+          expectedTerm: term,
+        });
+      } else if (qType === "matching") {
+        const sliceEnd = Math.min(i + 3, selectedCards.length);
+        const blockCards = selectedCards.slice(i, sliceEnd + 1);
+        if (blockCards.length < 2) {
+          const distractors = getDistractors(card.id, 3);
+          const options = [...distractors, term].sort(() => 0.5 - Math.random());
+          generated.push({
+            id: `q_${i}_mc`,
+            cardId: card.id,
+            type: "multiple_choice",
+            prompt: definition,
+            imageData: card.imageData || card.frontImage,
+            options,
+            correctAnswer: term,
+          });
+        } else {
+          const pairs = blockCards.map((c) => ({
+            cardId: c.id,
+            term: c.term || c.front || "",
+            definition: c.definition || c.back || "",
+          }));
+          const shuffledDefinitions = blockCards
+            .map((c) => ({ id: c.id, text: c.definition || c.back || "" }))
+            .sort(() => 0.5 - Math.random());
+
+          generated.push({
+            id: `q_${i}_mat`,
+            cardId: card.id,
+            type: "matching",
+            pairs,
+            shuffledDefinitions,
+          });
+          i = sliceEnd;
+        }
+      }
+    }
+
+    return generated;
   };
 
-  const handleSubmit = () => {
-    let correct = 0;
-    questions.forEach((q) => {
-      const userAns = (userAnswers[q.id] || "").trim().toLowerCase();
-      const actualAns = q.correctAnswer.trim().toLowerCase();
+  // Start test
+  const handleStartTest = () => {
+    if (allCards.length === 0) return;
+    const generated = generateQuestions(allCards);
+    if (!generated || generated.length === 0) return;
 
-      if (q.type === "written") {
-        const cleanUser = userAns.replace(/[.,!?'"`$]/g, "");
-        const cleanActual = actualAns.replace(/[.,!?'"`$]/g, "");
-        if (cleanUser === cleanActual || cleanActual.includes(cleanUser)) {
-          correct++;
-        }
-      } else {
-        if (userAns === actualAns) {
-          correct++;
-        }
+    setQuestions(generated);
+    setUserAnswers({});
+    setCurrentIdx(0);
+    setIsConfiguring(false);
+    setIsSubmitted(false);
+  };
+
+  // Repeat only mistakes
+  const handleStartMistakesOnly = (mistakeCards: DbCard[]) => {
+    if (mistakeCards.length === 0) return;
+    const generated = generateQuestions(mistakeCards);
+    if (!generated || generated.length === 0) return;
+
+    setQuestions(generated);
+    setUserAnswers({});
+    setCurrentIdx(0);
+    setIsConfiguring(false);
+    setIsSubmitted(false);
+  };
+
+  // Record answer for question
+  const handleAnswerChange = (questionId: string, answer: unknown) => {
+    setUserAnswers((prev) => ({
+      ...prev,
+      [questionId]: {
+        questionId,
+        answer,
+      },
+    }));
+  };
+
+  // Grade the completed test
+  const handleSubmitTest = () => {
+    const gradedAnswers: Record<string, UserAnswer> = {};
+
+    questions.forEach((q) => {
+      const userAns = userAnswers[q.id]?.answer;
+
+      if (q.type === "multiple_choice") {
+        const isCorrect = userAns === q.correctAnswer;
+        gradedAnswers[q.id] = {
+          questionId: q.id,
+          answer: userAns,
+          isCorrect,
+          score: isCorrect ? 1 : 0,
+        };
+      } else if (q.type === "true_false") {
+        const isCorrect = userAns === q.isCorrectMatch;
+        gradedAnswers[q.id] = {
+          questionId: q.id,
+          answer: userAns,
+          isCorrect,
+          score: isCorrect ? 1 : 0,
+        };
+      } else if (q.type === "written") {
+        const typed = typeof userAns === "string" ? userAns : "";
+        const check = checkAnswerWithFuzzy(typed, q.expectedTerm);
+        const isCorrect = check.isExact || check.isClose;
+        gradedAnswers[q.id] = {
+          questionId: q.id,
+          answer: typed,
+          isCorrect,
+          score: isCorrect ? 1 : 0,
+        };
+      } else if (q.type === "matching") {
+        const matchMap = (userAns as Record<string, string>) || {};
+        let matchedCount = 0;
+        q.pairs.forEach((pair) => {
+          if (matchMap[pair.cardId] === pair.cardId) {
+            matchedCount++;
+          }
+        });
+        const isCorrect = matchedCount === q.pairs.length;
+        gradedAnswers[q.id] = {
+          questionId: q.id,
+          answer: matchMap,
+          isCorrect,
+          score: q.pairs.length > 0 ? matchedCount / q.pairs.length : 0,
+        };
       }
     });
 
-    const total = questions.length;
-    const percent = Math.round((correct / Math.max(1, total)) * 100);
-
-    setScore({ correct, total, percent });
+    setUserAnswers(gradedAnswers);
     setIsSubmitted(true);
 
-    if (percent >= 70) {
-      confetti({ particleCount: 90, spread: 70, origin: { y: 0.6 } });
+    const totalScore = questions.reduce(
+      (sum, q) => sum + (gradedAnswers[q.id]?.score || 0),
+      0
+    );
+    const percentage = Math.round((totalScore / questions.length) * 100);
+
+    if (percentage >= 70) {
+      confetti({
+        particleCount: 100,
+        spread: 70,
+        origin: { y: 0.6 },
+      });
     }
   };
 
-  if (cards.length === 0) {
+  if (allCards.length < 2) {
     return (
-      <div className="max-w-md mx-auto py-16 text-center space-y-4">
-        <h3 className="text-lg font-bold text-zinc-900 dark:text-white">Колода пуста</h3>
-        <p className="text-sm text-zinc-500">Для создания теста необходимы карточки.</p>
-        <button
-          onClick={onExit}
-          className="px-4 py-2 text-sm rounded-lg bg-indigo-600 text-white font-medium"
-        >
-          Вернуться к колоде
-        </button>
+      <div className="max-w-xl mx-auto py-16 px-4 flex flex-col items-center justify-center text-center space-y-4">
+        <AlertCircle className="w-12 h-12 text-amber-500 mb-2" />
+        <h2 className="text-xl font-bold text-zinc-900 dark:text-white">
+          Недостаточно карточек для теста
+        </h2>
+        <p className="text-zinc-500 text-sm max-w-sm">
+          Для создания полноценного теста требуется хотя бы 2 карточки.
+        </p>
+        <Button onClick={onExit} variant="outline">
+          Назад к колоде
+        </Button>
       </div>
     );
   }
 
-  return (
-    <div className="max-w-3xl mx-auto px-4 py-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between pb-4 border-b border-zinc-200 dark:border-zinc-800">
-        <button
-          onClick={onExit}
-          className="flex items-center space-x-1.5 text-xs font-medium text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          <span>Выйти из теста</span>
-        </button>
-
-        <div className="flex items-center space-x-2">
-          <FileCheck className="w-5 h-5 text-indigo-500" />
-          <h2 className="text-lg font-bold text-zinc-900 dark:text-white">
-            Проверочный тест: {deck.title}
-          </h2>
-        </div>
-
-        <span className="text-xs text-zinc-400">
-          Отвечено: {Object.keys(userAnswers).length} из {questions.length}
-        </span>
-      </div>
-
-      {/* Results Banner if submitted */}
-      {isSubmitted && score && (
-        <div className="p-6 rounded-3xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-lg text-center space-y-4 animate-in fade-in duration-200">
-          <div className="flex items-center justify-center space-x-2">
-            <Award className="w-6 h-6 text-indigo-500" />
-            <h3 className="text-xl font-bold text-zinc-900 dark:text-white">
-              Результаты теста
-            </h3>
-          </div>
-
-          <div className="text-4xl font-black text-indigo-600 dark:text-indigo-400">
-            {score.percent}%
-          </div>
-
-          <p className="text-sm text-zinc-600 dark:text-zinc-400">
-            Вы ответили правильно на {score.correct} из {score.total} вопросов.
-          </p>
-
-          <div className="flex justify-center space-x-3 pt-2">
-            <button
-              onClick={initTest}
-              className="flex items-center space-x-1.5 px-4 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-xs font-semibold transition"
-            >
-              <RotateCw className="w-4 h-4" />
-              <span>Пройти заново</span>
-            </button>
+  // 1. CONFIGURATION SCREEN
+  if (isConfiguring) {
+    return (
+      <div className="max-w-xl mx-auto px-4 py-4 space-y-6 animate-in fade-in duration-150">
+        <header className="flex items-center justify-between pb-3 border-b border-zinc-200 dark:border-zinc-800">
+          <div className="flex items-center gap-3">
             <button
               onClick={onExit}
-              className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-sm transition"
+              className="flex items-center space-x-1.5 text-xs font-semibold text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition"
             >
-              Назад к колоде
+              <ArrowLeft className="w-4 h-4" />
+              <span>Назад</span>
             </button>
+            <div>
+              <h1 className="font-bold text-base sm:text-lg text-zinc-900 dark:text-white">
+                Настройка теста
+              </h1>
+              <p className="text-xs text-zinc-500">{deck.title}</p>
+            </div>
+          </div>
+        </header>
+
+        <div className="space-y-6">
+          {/* Question Count Selection */}
+          <UICard>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                <ClipboardCheck className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                Количество вопросов
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-4 gap-2">
+                {[5, 10, 20, "all" as const].map((num) => {
+                  const maxAvail = allCards.length;
+                  const isDisabled = num !== "all" && num > maxAvail;
+                  const isSelected = questionCount === num;
+
+                  return (
+                    <Button
+                      key={String(num)}
+                      type="button"
+                      variant={isSelected ? "default" : "outline"}
+                      disabled={isDisabled}
+                      onClick={() => setQuestionCount(num)}
+                      className={`flex flex-col h-auto py-2.5 ${
+                        isSelected ? "bg-indigo-600 hover:bg-indigo-500 text-white" : ""
+                      }`}
+                    >
+                      <span className="font-bold text-base">
+                        {num === "all" ? "Все" : num}
+                      </span>
+                      <span className="text-[10px] opacity-70">
+                        {num === "all" ? `${maxAvail} шт.` : "вопросов"}
+                      </span>
+                    </Button>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </UICard>
+
+          {/* Question Types Selection */}
+          <UICard>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-semibold">
+                Типы вопросов
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-sm font-medium">Выбор варианта</div>
+                  <div className="text-xs text-zinc-500">
+                    1 верный ответ из 4 предложенных вариантов
+                  </div>
+                </div>
+                <Switch
+                  checked={enabledTypes.multiple_choice}
+                  onCheckedChange={(v) =>
+                    setEnabledTypes((prev) => ({ ...prev, multiple_choice: v }))
+                  }
+                />
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-sm font-medium">Верно / Неверно</div>
+                  <div className="text-xs text-zinc-500">
+                    Определите, соответствует ли термин определению
+                  </div>
+                </div>
+                <Switch
+                  checked={enabledTypes.true_false}
+                  onCheckedChange={(v) =>
+                    setEnabledTypes((prev) => ({ ...prev, true_false: v }))
+                  }
+                />
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-sm font-medium">Письменный ответ</div>
+                  <div className="text-xs text-zinc-500">
+                    Ввод термина вручную с допуском опечаток (Левенштейн)
+                  </div>
+                </div>
+                <Switch
+                  checked={enabledTypes.written}
+                  onCheckedChange={(v) =>
+                    setEnabledTypes((prev) => ({ ...prev, written: v }))
+                  }
+                />
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-sm font-medium">Сопоставление</div>
+                  <div className="text-xs text-zinc-500">
+                    Соедините термины со списком определений
+                  </div>
+                </div>
+                <Switch
+                  checked={enabledTypes.matching}
+                  onCheckedChange={(v) =>
+                    setEnabledTypes((prev) => ({ ...prev, matching: v }))
+                  }
+                />
+              </div>
+            </CardContent>
+          </UICard>
+
+          <Button
+            size="lg"
+            className="w-full text-base font-semibold shadow bg-indigo-600 hover:bg-indigo-500 text-white"
+            onClick={handleStartTest}
+          >
+            Начать тестирование
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // 2. RESULTS & REVIEW SCREEN
+  if (isSubmitted) {
+    const totalScore = questions.reduce(
+      (sum, q) => sum + (userAnswers[q.id]?.score || 0),
+      0
+    );
+    const percentage = Math.round((totalScore / questions.length) * 100);
+
+    const questionsToDisplay = filterOnlyMistakes
+      ? questions.filter((q) => !userAnswers[q.id]?.isCorrect)
+      : questions;
+
+    const gradeText =
+      percentage >= 90
+        ? "Отлично! Материал усвоен превосходно."
+        : percentage >= 75
+        ? "Хороший результат! Повторите несколько карточек."
+        : percentage >= 50
+        ? "Удовлетворительно. Рекомендуется повторить колоду."
+        : "Требуется повторение. Попробуйте режим «Заучивание».";
+
+    // Collect mistake cards
+    const mistakeCards = allCards.filter((c) => {
+      return questions.some((q) => {
+        const ans = userAnswers[q.id];
+        if (ans && !ans.isCorrect) {
+          if (q.type === "matching") {
+            return q.pairs.some((p) => p.cardId === c.id);
+          }
+          return q.cardId === c.id;
+        }
+        return false;
+      });
+    });
+
+    return (
+      <div className="max-w-2xl mx-auto px-4 py-4 space-y-6 pb-12 animate-in fade-in duration-150">
+        <header className="flex items-center justify-between pb-3 border-b border-zinc-200 dark:border-zinc-800">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={onExit}
+              className="flex items-center space-x-1.5 text-xs font-semibold text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span>Назад</span>
+            </button>
+            <h1 className="font-bold text-base sm:text-lg text-zinc-900 dark:text-white">
+              Результаты теста
+            </h1>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setIsConfiguring(true)}
+            className="gap-1.5 text-xs"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            Пройти снова
+          </Button>
+        </header>
+
+        <div className="space-y-6">
+          {/* Summary Score Card */}
+          <UICard className="text-center p-6 sm:p-8 bg-card border shadow-sm">
+            <div className="text-5xl sm:text-6xl font-black font-mono text-indigo-600 dark:text-indigo-400 mb-2">
+              {percentage}%
+            </div>
+            <div className="text-sm font-medium text-foreground mb-1">
+              Набрано {totalScore.toFixed(1)} из {questions.length} баллов
+            </div>
+            <p className="text-xs sm:text-sm text-zinc-500">{gradeText}</p>
+          </UICard>
+
+          {/* Action Row */}
+          <div className="flex flex-col sm:flex-row gap-3">
+            {mistakeCards.length > 0 && (
+              <Button
+                variant="outline"
+                className="flex-1 gap-2 border-red-300 dark:border-red-900/60 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30"
+                onClick={() => handleStartMistakesOnly(mistakeCards)}
+              >
+                <RotateCcw className="w-4 h-4" />
+                <span>Повторить только ошибки ({mistakeCards.length})</span>
+              </Button>
+            )}
+            <Button
+              className="flex-1 gap-2 bg-indigo-600 hover:bg-indigo-500 text-white"
+              onClick={() => setIsConfiguring(true)}
+            >
+              <RotateCcw className="w-4 h-4" />
+              <span>Новый тест</span>
+            </Button>
+            <Button variant="secondary" onClick={onExit}>
+              Назад к колоде
+            </Button>
+          </div>
+
+          {/* Filter Bar */}
+          <div className="flex items-center justify-between pt-2">
+            <div className="text-sm font-bold flex items-center gap-2">
+              <ClipboardCheck className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+              <span>Разбор вопросов ({questionsToDisplay.length})</span>
+            </div>
+
+            <Button
+              variant={filterOnlyMistakes ? "secondary" : "ghost"}
+              size="sm"
+              onClick={() => setFilterOnlyMistakes(!filterOnlyMistakes)}
+              className="text-xs gap-1.5"
+            >
+              <Filter className="w-3.5 h-3.5" />
+              {filterOnlyMistakes ? "Показать все" : "Только ошибки"}
+            </Button>
+          </div>
+
+          {/* Detailed Question Review List */}
+          <div className="space-y-4">
+            {questionsToDisplay.map((q, idx) => {
+              const ansRecord = userAnswers[q.id];
+              const isCorrect = !!ansRecord?.isCorrect;
+
+              return (
+                <div
+                  key={q.id}
+                  className={`p-4 rounded-xl border bg-card transition-all ${
+                    isCorrect
+                      ? "border-emerald-500/30 dark:border-emerald-500/20"
+                      : "border-red-500/40 bg-red-50/20 dark:bg-red-950/20"
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <Badge
+                      variant="outline"
+                      className={`text-xs ${
+                        isCorrect
+                          ? "border-emerald-500 text-emerald-600 bg-emerald-500/10"
+                          : "border-red-500 text-red-600 bg-red-500/10"
+                      }`}
+                    >
+                      {isCorrect ? (
+                        <CheckCircle className="w-3 h-3 mr-1 inline" />
+                      ) : (
+                        <XCircle className="w-3 h-3 mr-1 inline" />
+                      )}
+                      Вопрос {idx + 1}
+                    </Badge>
+                  </div>
+
+                  {/* Multiple Choice Review */}
+                  {q.type === "multiple_choice" && (
+                    <div className="space-y-2 text-sm">
+                      <div className="text-xs text-zinc-500 font-semibold">
+                        Определение:
+                      </div>
+                      <div className="font-medium p-2.5 rounded bg-zinc-100 dark:bg-zinc-800/60">
+                        <MarkdownMath content={q.prompt} />
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 mt-2">
+                        <div>
+                          <span className="text-xs text-zinc-500">Ваш ответ: </span>
+                          <span
+                            className={
+                              isCorrect
+                                ? "text-emerald-600 font-semibold"
+                                : "text-red-600 font-semibold"
+                            }
+                          >
+                            {(ansRecord?.answer as string) || "— Не отвечено"}
+                          </span>
+                        </div>
+                        {!isCorrect && (
+                          <div>
+                            <span className="text-xs text-zinc-500">Правильный ответ: </span>
+                            <span className="text-emerald-600 font-semibold">
+                              {q.correctAnswer}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* True / False Review */}
+                  {q.type === "true_false" && (
+                    <div className="space-y-2 text-sm">
+                      <div className="p-2.5 rounded bg-zinc-100 dark:bg-zinc-800/60 space-y-1">
+                        <div>
+                          <span className="text-xs text-zinc-500">Термин: </span>
+                          <span className="font-semibold">{q.term}</span>
+                        </div>
+                        <div>
+                          <span className="text-xs text-zinc-500">Определение: </span>
+                          <span>{q.displayedDefinition}</span>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 mt-2">
+                        <div>
+                          <span className="text-xs text-zinc-500">Ваш ответ: </span>
+                          <span
+                            className={
+                              isCorrect
+                                ? "text-emerald-600 font-semibold"
+                                : "text-red-600 font-semibold"
+                            }
+                          >
+                            {ansRecord?.answer === true
+                              ? "Верно"
+                              : ansRecord?.answer === false
+                              ? "Неверно"
+                              : "— Не отвечено"}
+                          </span>
+                        </div>
+                        {!isCorrect && (
+                          <div>
+                            <span className="text-xs text-zinc-500">Правильно: </span>
+                            <span className="text-emerald-600 font-semibold">
+                              {q.isCorrectMatch ? "Верно" : "Неверно"}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Written Review */}
+                  {q.type === "written" && (
+                    <div className="space-y-2 text-sm">
+                      <div className="text-xs text-zinc-500 font-semibold">
+                        Определение:
+                      </div>
+                      <div className="font-medium p-2.5 rounded bg-zinc-100 dark:bg-zinc-800/60">
+                        <MarkdownMath content={q.prompt} />
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 mt-2">
+                        <div>
+                          <span className="text-xs text-zinc-500">Ваш ввод: </span>
+                          <span
+                            className={
+                              isCorrect
+                                ? "text-emerald-600 font-semibold"
+                                : "text-red-600 font-semibold"
+                            }
+                          >
+                            {(ansRecord?.answer as string) || "— Пусто"}
+                          </span>
+                        </div>
+                        {!isCorrect && (
+                          <div>
+                            <span className="text-xs text-zinc-500">Ожидалось: </span>
+                            <span className="text-emerald-600 font-semibold">
+                              {q.expectedTerm}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Matching Review */}
+                  {q.type === "matching" && (
+                    <div className="space-y-2 text-sm">
+                      <div className="text-xs text-zinc-500 font-semibold">
+                        Сопоставленные пары:
+                      </div>
+                      <div className="space-y-1.5">
+                        {q.pairs.map((p) => {
+                          const userMatchId = (
+                            ansRecord?.answer as Record<string, string>
+                          )?.[p.cardId];
+                          const matchedDef = q.shuffledDefinitions.find(
+                            (d) => d.id === userMatchId
+                          );
+                          const isPairCorrect = userMatchId === p.cardId;
+
+                          return (
+                            <div
+                              key={p.cardId}
+                              className={`p-2 rounded border text-xs flex flex-col sm:flex-row justify-between gap-1 ${
+                                isPairCorrect
+                                  ? "bg-emerald-500/5 border-emerald-500/30"
+                                  : "bg-red-500/5 border-red-500/30"
+                              }`}
+                            >
+                              <span className="font-semibold">{p.term}</span>
+                              <span className="text-zinc-500">
+                                ➔ {matchedDef ? matchedDef.text : "— Не сопоставлено"}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
-      )}
+      </div>
+    );
+  }
 
-      {/* Questions List */}
-      <div className="space-y-6">
-        {questions.map((q, idx) => {
-          const userAns = userAnswers[q.id] || "";
+  // 3. TEST TAKING SCREEN
+  const currentQ = questions[currentIdx];
+  const progressPercent =
+    questions.length > 0
+      ? Math.round((Object.keys(userAnswers).length / questions.length) * 100)
+      : 0;
 
-          let isQuestionCorrect = false;
-          if (isSubmitted) {
-            const u = userAns.trim().toLowerCase().replace(/[.,!?'"`$]/g, "");
-            const a = q.correctAnswer.trim().toLowerCase().replace(/[.,!?'"`$]/g, "");
-            isQuestionCorrect = u === a || a.includes(u);
-          }
+  return (
+    <div className="max-w-3xl mx-auto px-4 py-4 flex flex-col min-h-[600px] justify-between space-y-6">
+      {/* Test Header */}
+      <header className="flex items-center justify-between pb-3 border-b border-zinc-200 dark:border-zinc-800">
+        <div className="flex items-center gap-3">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => {
+              if (confirm("Вы уверены, что хотите прервать прохождение теста?")) {
+                setIsConfiguring(true);
+              }
+            }}
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </Button>
+          <div>
+            <h1 className="font-semibold text-sm sm:text-base leading-none text-zinc-900 dark:text-white">
+              Вопрос {currentIdx + 1} из {questions.length}
+            </h1>
+            <p className="text-xs text-zinc-500 mt-0.5">{deck.title}</p>
+          </div>
+        </div>
 
-          return (
-            <div
-              key={q.id}
-              className={`p-6 rounded-2xl bg-white dark:bg-zinc-900 border transition-all ${
-                isSubmitted
-                  ? isQuestionCorrect
-                    ? "border-emerald-500/60 bg-emerald-50/10"
-                    : "border-red-500/60 bg-red-50/10"
-                  : "border-zinc-200 dark:border-zinc-800"
-              }`}
-            >
-              <div className="flex items-start justify-between mb-3">
-                <span className="text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
-                  Вопрос {idx + 1} • {q.type === "choice" ? "Выбор ответа" : q.type === "true_false" ? "Верно / Неверно" : "Письменный ответ"}
-                </span>
-                {isSubmitted && (
-                  <div>
-                    {isQuestionCorrect ? (
-                      <span className="flex items-center space-x-1 text-xs font-bold text-emerald-600 dark:text-emerald-400">
-                        <CheckCircle className="w-4 h-4" />
-                        <span>Верно</span>
-                      </span>
-                    ) : (
-                      <span className="flex items-center space-x-1 text-xs font-bold text-red-600 dark:text-red-400">
-                        <XCircle className="w-4 h-4" />
-                        <span>Неверно</span>
-                      </span>
-                    )}
+        <Button
+          size="sm"
+          onClick={() => {
+            const unanswered = questions.length - Object.keys(userAnswers).length;
+            if (
+              unanswered > 0 &&
+              !confirm(
+                `У вас осталось ${unanswered} неотвеченных вопросов. Завершить тест сейчас?`
+              )
+            ) {
+              return;
+            }
+            handleSubmitTest();
+          }}
+          className="gap-1.5 bg-indigo-600 hover:bg-indigo-500 text-white"
+        >
+          <ClipboardCheck className="w-4 h-4" />
+          <span>Завершить</span>
+        </Button>
+      </header>
+
+      {/* Progress Bar */}
+      <Progress value={progressPercent} className="h-1.5" />
+
+      {/* Question Stepper Area */}
+      <main className="flex-1 w-full flex flex-col justify-between">
+        <div className="w-full">
+          {/* Question Type Indicator */}
+          <div className="mb-4 flex items-center justify-between">
+            <Badge variant="secondary" className="text-xs">
+              {currentQ.type === "multiple_choice" && "Выбор одного варианта"}
+              {currentQ.type === "true_false" && "Верно или Неверно"}
+              {currentQ.type === "written" && "Письменный ввод"}
+              {currentQ.type === "matching" && "Сопоставление терминов"}
+            </Badge>
+            <span className="text-xs text-zinc-500">
+              Отвечено: {Object.keys(userAnswers).length} / {questions.length}
+            </span>
+          </div>
+
+          {/* QUESTION CARD */}
+          <UICard className="p-5 sm:p-6 shadow-sm mb-6">
+            {/* TYPE 1: MULTIPLE CHOICE */}
+            {currentQ.type === "multiple_choice" && (
+              <div className="space-y-4">
+                <div className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">
+                  Определение:
+                </div>
+                <div className="text-base sm:text-lg font-medium leading-relaxed text-zinc-900 dark:text-white">
+                  <MarkdownMath content={currentQ.prompt} />
+                </div>
+
+                {currentQ.imageData && (
+                  <div className="max-h-48 rounded-lg overflow-hidden border">
+                    <img
+                      src={currentQ.imageData}
+                      alt="visual aid"
+                      className="w-full h-full object-contain"
+                    />
                   </div>
                 )}
-              </div>
 
-              <div className="text-base font-medium text-zinc-900 dark:text-white mb-4">
-                <MarkdownMath content={q.prompt} />
-              </div>
-
-              {(q.card.imageData || q.card.frontImage) && (
-                <img
-                  src={q.card.imageData || q.card.frontImage}
-                  alt="Question illustration"
-                  className="max-h-40 rounded-xl mb-4 object-contain shadow-sm"
-                />
-              )}
-
-              {/* Multiple Choice / True False */}
-              {(q.type === "choice" || q.type === "true_false") && q.options && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  {q.options.map((opt, optIdx) => {
-                    const isSelected = userAns === opt;
-                    const isTheActualAnswer = opt === q.correctAnswer;
-
-                    let optStyle =
-                      "border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 text-zinc-800 dark:text-zinc-200 hover:border-indigo-400";
-
-                    if (isSelected) {
-                      optStyle =
-                        "border-indigo-600 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-900 dark:text-indigo-300 font-semibold ring-1 ring-indigo-600";
-                    }
-
-                    if (isSubmitted) {
-                      if (isTheActualAnswer) {
-                        optStyle =
-                          "border-emerald-500 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 font-semibold";
-                      } else if (isSelected && !isTheActualAnswer) {
-                        optStyle =
-                          "border-red-500 bg-red-50 dark:bg-red-950/40 text-red-800 dark:text-red-300";
-                      }
-                    }
+                <div className="pt-2 grid grid-cols-1 gap-2.5">
+                  {currentQ.options.map((opt, optIdx) => {
+                    const isSelected = userAnswers[currentQ.id]?.answer === opt;
 
                     return (
                       <button
                         key={optIdx}
-                        disabled={isSubmitted}
-                        onClick={() => handleSelectAnswer(q.id, opt)}
-                        className={`p-3 rounded-xl border text-left text-sm flex items-start space-x-2 transition ${optStyle}`}
+                        type="button"
+                        onClick={() => handleAnswerChange(currentQ.id, opt)}
+                        className={`w-full text-left p-3.5 rounded-xl border text-sm sm:text-base font-medium transition-all flex items-center justify-between ${
+                          isSelected
+                            ? "border-indigo-600 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 ring-2 ring-indigo-500/30 font-semibold"
+                            : "border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800 text-zinc-900 dark:text-zinc-100"
+                        }`}
                       >
-                        <span className="w-5 h-5 rounded-full border border-current flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">
-                          {["A", "B", "C", "D"][optIdx] || optIdx + 1}
-                        </span>
-                        <div className="flex-1">
+                        <div className="flex items-center gap-3">
+                          <span className="w-6 h-6 rounded-full border flex items-center justify-center text-xs font-mono font-bold text-zinc-400">
+                            {optIdx + 1}
+                          </span>
                           <MarkdownMath content={opt} />
                         </div>
                       </button>
                     );
                   })}
                 </div>
-              )}
+              </div>
+            )}
 
-              {/* Written */}
-              {q.type === "written" && (
-                <div className="space-y-2">
-                  <input
-                    type="text"
-                    disabled={isSubmitted}
-                    value={userAns}
-                    onChange={(e) => handleSelectAnswer(q.id, e.target.value)}
-                    placeholder="Введите ваш ответ..."
-                    className="w-full px-3.5 py-2.5 text-sm rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  />
-                  {isSubmitted && !isQuestionCorrect && (
-                    <div className="p-3 text-xs rounded-xl bg-zinc-100 dark:bg-zinc-800/80 text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700">
-                      <span className="font-semibold block mb-0.5">Правильный ответ:</span>
-                      <MarkdownMath content={q.correctAnswer} />
+            {/* TYPE 2: TRUE / FALSE */}
+            {currentQ.type === "true_false" && (
+              <div className="space-y-5">
+                <div className="space-y-3">
+                  <div className="p-4 rounded-xl bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700 space-y-1">
+                    <div className="text-xs uppercase font-semibold text-zinc-500">
+                      Термин:
                     </div>
-                  )}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
+                    <div className="text-lg font-bold text-indigo-600 dark:text-indigo-400">
+                      <MarkdownMath content={currentQ.term} />
+                    </div>
+                  </div>
 
-      {/* Submit Bar */}
-      {!isSubmitted && (
-        <div className="pt-4 pb-12 flex justify-end">
-          <button
-            onClick={handleSubmit}
-            disabled={Object.keys(userAnswers).length === 0}
-            className="flex items-center space-x-2 px-8 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm shadow-md shadow-indigo-500/25 transition disabled:opacity-40"
-          >
-            <CheckCircle className="w-5 h-5" />
-            <span>Завершить тест ({Object.keys(userAnswers).length}/{questions.length})</span>
-          </button>
+                  <div className="p-4 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 space-y-1">
+                    <div className="text-xs uppercase font-semibold text-zinc-500">
+                      Предложенное определение:
+                    </div>
+                    <div className="text-base text-zinc-900 dark:text-zinc-100 leading-relaxed">
+                      <MarkdownMath content={currentQ.displayedDefinition} />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="text-center text-xs text-zinc-500">
+                  Соответствует ли данное определение указанному термину?
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 pt-2">
+                  <Button
+                    type="button"
+                    variant={
+                      userAnswers[currentQ.id]?.answer === true ? "default" : "outline"
+                    }
+                    size="lg"
+                    onClick={() => handleAnswerChange(currentQ.id, true)}
+                    className={`h-14 text-base font-bold gap-2 ${
+                      userAnswers[currentQ.id]?.answer === true
+                        ? "bg-emerald-600 hover:bg-emerald-500 text-white"
+                        : ""
+                    }`}
+                  >
+                    <CheckCircle className="w-5 h-5 text-emerald-500" />
+                    <span>Верно</span>
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={
+                      userAnswers[currentQ.id]?.answer === false ? "destructive" : "outline"
+                    }
+                    size="lg"
+                    onClick={() => handleAnswerChange(currentQ.id, false)}
+                    className="h-14 text-base font-bold gap-2"
+                  >
+                    <XCircle className="w-5 h-5" />
+                    <span>Неверно</span>
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* TYPE 3: WRITTEN */}
+            {currentQ.type === "written" && (
+              <div className="space-y-4">
+                <div className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">
+                  Определение:
+                </div>
+                <div className="text-base sm:text-lg font-medium leading-relaxed text-zinc-900 dark:text-white">
+                  <MarkdownMath content={currentQ.prompt} />
+                </div>
+
+                {currentQ.imageData && (
+                  <div className="max-h-48 rounded-lg overflow-hidden border">
+                    <img
+                      src={currentQ.imageData}
+                      alt="visual aid"
+                      className="w-full h-full object-contain"
+                    />
+                  </div>
+                )}
+
+                <div className="pt-2 space-y-2">
+                  <label className="text-xs text-zinc-500 font-medium">
+                    Введите термин:
+                  </label>
+                  <Input
+                    type="text"
+                    placeholder="Ваш ответ..."
+                    value={(userAnswers[currentQ.id]?.answer as string) || ""}
+                    onChange={(e) => handleAnswerChange(currentQ.id, e.target.value)}
+                    className="h-12 text-base font-medium"
+                    autoFocus
+                  />
+                  <span className="text-[11px] text-zinc-400 block">
+                    Допускаются небольшие опечатки (алгоритм Левенштейна).
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* TYPE 4: MATCHING BLOCK */}
+            {currentQ.type === "matching" && (
+              <div className="space-y-4">
+                <div className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">
+                  Сопоставьте каждый термин с его определением:
+                </div>
+
+                <div className="space-y-3 pt-1">
+                  {currentQ.pairs.map((pair, pIdx) => {
+                    const currentSelectedDef = (
+                      userAnswers[currentQ.id]?.answer as Record<string, string>
+                    )?.[pair.cardId];
+
+                    return (
+                      <div
+                        key={pair.cardId}
+                        className="p-3 border rounded-xl bg-card space-y-2"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="w-5 h-5 rounded-full bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-xs font-bold font-mono">
+                            {pIdx + 1}
+                          </span>
+                          <span className="font-semibold text-sm">{pair.term}</span>
+                        </div>
+
+                        <select
+                          className="w-full h-10 px-3 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs sm:text-sm font-medium focus:ring-2 focus:ring-indigo-500 outline-none"
+                          value={currentSelectedDef || ""}
+                          onChange={(e) => {
+                            const prev =
+                              (userAnswers[currentQ.id]?.answer as Record<
+                                string,
+                                string
+                              >) || {};
+                            handleAnswerChange(currentQ.id, {
+                              ...prev,
+                              [pair.cardId]: e.target.value,
+                            });
+                          }}
+                        >
+                          <option value="">-- Выберите определение --</option>
+                          {currentQ.shuffledDefinitions.map((def) => (
+                            <option key={def.id} value={def.id}>
+                              {def.text}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </UICard>
+
+          {/* Quick Question Jump Buttons */}
+          <div className="flex flex-wrap items-center justify-center gap-1.5 py-2">
+            {questions.map((q, idx) => {
+              const isAnswered = !!userAnswers[q.id];
+              const isCurrent = currentIdx === idx;
+
+              return (
+                <button
+                  key={q.id}
+                  onClick={() => setCurrentIdx(idx)}
+                  className={`w-7 h-7 rounded text-xs font-mono font-bold transition-all ${
+                    isCurrent
+                      ? "bg-indigo-600 text-white ring-2 ring-indigo-500/40"
+                      : isAnswered
+                      ? "bg-zinc-200 dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 border border-indigo-500/40"
+                      : "bg-zinc-100 dark:bg-zinc-800 text-zinc-400 border border-zinc-200 dark:border-zinc-700"
+                  }`}
+                >
+                  {idx + 1}
+                </button>
+              );
+            })}
+          </div>
         </div>
-      )}
+
+        {/* Stepper Navigation Prev / Next */}
+        <div className="flex items-center justify-between gap-3 pt-6">
+          <Button
+            variant="outline"
+            disabled={currentIdx === 0}
+            onClick={() => setCurrentIdx((i) => Math.max(0, i - 1))}
+          >
+            Назад
+          </Button>
+
+          {currentIdx < questions.length - 1 ? (
+            <Button
+              onClick={() =>
+                setCurrentIdx((i) => Math.min(questions.length - 1, i + 1))
+              }
+              className="gap-1.5 bg-indigo-600 hover:bg-indigo-500 text-white"
+            >
+              <span>Следующий</span>
+              <ArrowRight className="w-4 h-4" />
+            </Button>
+          ) : (
+            <Button
+              onClick={handleSubmitTest}
+              className="bg-emerald-600 hover:bg-emerald-500 text-white gap-1.5 font-semibold"
+            >
+              <ClipboardCheck className="w-4 h-4" />
+              <span>Завершить тест</span>
+            </Button>
+          )}
+        </div>
+      </main>
     </div>
   );
 }

@@ -77,37 +77,81 @@ export async function processSyncQueue(userId: string): Promise<void> {
   syncInProgress = true;
   await notifySyncListeners();
 
+  let syncError: string | null = null;
+  const BATCH_SIZE = 50;
+  const MAX_BATCHES = 10; // Process at most 500 items per run to prevent infinite loops
+  const failedItemIds = new Set<string>();
+
   try {
-    const queueItems = await db.sync_queue.limit(50).toArray();
+    let batchCount = 0;
 
-    for (const item of queueItems) {
-      const docRef = doc(dbFirestore, item.collection, item.docId);
-
-      if (item.action === "delete") {
-        await deleteDoc(docRef);
-      } else if (item.action === "upsert" && item.payload) {
-        // Enforce owner / syncedUserId
-        const cloudData = {
-          ...item.payload,
-          syncedUserId: userId,
-          syncedAt: Date.now(),
-        };
-        await setDoc(docRef, cloudData, { merge: true });
+    while (batchCount < MAX_BATCHES) {
+      if (!isOnline) {
+        break;
       }
 
-      // Remove from local Dexie queue once written
-      await db.sync_queue.delete(item.id);
+      const queueItems = await db.sync_queue.limit(BATCH_SIZE).toArray();
+      if (queueItems.length === 0) {
+        break;
+      }
+
+      // Filter out items that have already failed during this sync run
+      const actionableItems = queueItems.filter((item) => !failedItemIds.has(item.id));
+      if (actionableItems.length === 0) {
+        break;
+      }
+
+      batchCount++;
+
+      for (const item of actionableItems) {
+        try {
+          const docRef = doc(dbFirestore, item.collection, item.docId);
+
+          if (item.action === "delete") {
+            await deleteDoc(docRef);
+          } else if (item.action === "upsert" && item.payload) {
+            // Enforce owner / syncedUserId
+            const cloudData = {
+              ...(item.payload as Record<string, unknown>),
+              syncedUserId: userId,
+              syncedAt: Date.now(),
+            };
+            await setDoc(docRef, cloudData, { merge: true });
+          }
+
+          // Remove from local Dexie queue once written
+          await db.sync_queue.delete(item.id);
+        } catch (itemErr: unknown) {
+          console.error(
+            `Sync error on item ${item.id} (${item.collection}/${item.docId}):`,
+            itemErr
+          );
+          failedItemIds.add(item.id);
+
+          const attempts = (item.attempts || 0) + 1;
+          if (attempts >= 3) {
+            console.error(
+              `Item ${item.id} reached maximum sync attempts (${attempts}). Dropping from queue:`,
+              item
+            );
+            await db.sync_queue.delete(item.id);
+          } else {
+            await db.sync_queue.put({
+              ...item,
+              attempts,
+            });
+          }
+        }
+      }
     }
 
     lastSyncedTime = Date.now();
-    await notifySyncListeners();
   } catch (err: unknown) {
     console.error("Background push sync error:", err);
-    const message = err instanceof Error ? err.message : "Sync push failed";
-    await notifySyncListeners(message);
+    syncError = err instanceof Error ? err.message : "Sync push failed";
   } finally {
     syncInProgress = false;
-    await notifySyncListeners();
+    await notifySyncListeners(syncError);
   }
 }
 

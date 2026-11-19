@@ -1,13 +1,14 @@
 {
   "name": "zinapse",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "vitest run"
+    "test": "vitest run",
+    "backup:gdrive": "powershell -ExecutionPolicy Bypass -File ./scripts/sync-gdrive.ps1"
   },
   "dependencies": {
     "@capacitor/android": "^8.6.2",

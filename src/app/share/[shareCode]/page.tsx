@@ -71,26 +71,32 @@ export default function SharedDeckPage({
         if (isFirebaseConfigured() && dbFirestore) {
           const q = query(
             collection(dbFirestore, "decks"),
-            where("shareCode", "==", shareCode)
+            where("shareCode", "==", shareCode),
+            where("isPublic", "==", true)
           );
           const snap = await getDocs(q);
 
           if (!snap.empty) {
             const cloudDeck = snap.docs[0].data() as Deck;
-            setDeck(cloudDeck);
 
-            // Fetch cloud cards
-            const cardsQuery = query(
-              collection(dbFirestore, "cards"),
-              where("deckId", "==", cloudDeck.id)
-            );
-            const cardsSnap = await getDocs(cardsQuery);
-            const cloudCards: DbCard[] = [];
-            cardsSnap.forEach((docSnap) => cloudCards.push(docSnap.data() as DbCard));
-            cloudCards.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-            setCards(cloudCards);
-            setIsLoading(false);
-            return;
+            try {
+              // Fetch cloud cards for this public deck
+              const cardsQuery = query(
+                collection(dbFirestore, "cards"),
+                where("deckId", "==", cloudDeck.id)
+              );
+              const cardsSnap = await getDocs(cardsQuery);
+              const cloudCards: DbCard[] = [];
+              cardsSnap.forEach((docSnap) => cloudCards.push(docSnap.data() as DbCard));
+              cloudCards.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+              setCards(cloudCards);
+              setDeck(cloudDeck);
+              setIsLoading(false);
+              return;
+            } catch (cardErr) {
+              console.error("Failed to load cards for public deck:", cardErr);
+              setDeck(null);
+            }
           }
         }
       } catch (err) {
@@ -191,9 +197,9 @@ export default function SharedDeckPage({
     return (
       <div className="min-h-screen max-w-md mx-auto p-4 flex flex-col items-center justify-center text-center">
         <AlertCircle className="w-12 h-12 text-destructive mb-3" />
-        <h2 className="text-xl font-bold mb-1">Колода не найдена</h2>
+        <h2 className="text-xl font-bold mb-1">Колода приватна или не найдена</h2>
         <p className="text-sm text-muted-foreground mb-6">
-          Колода с кодом <code className="font-mono text-foreground font-bold">{shareCode}</code> не существует или была удалена.
+          Колода с кодом <code className="font-mono text-foreground font-bold">{shareCode}</code> не существует, является приватной или была удалена.
         </p>
         <Button asChild>
           <Link href="/">На главную</Link>

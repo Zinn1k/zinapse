@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, use } from "react";
+import React, { useState, useEffect, use } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useLiveQuery } from "dexie-react-hooks";
@@ -22,7 +22,7 @@ import {
 import { db, GUEST_USER_ID, deleteDeckCascade, type Card } from "@/lib/db";
 import { calculateDeckFSRSStats } from "@/lib/fsrs";
 import { speakText } from "@/lib/speech";
-import { dbFirestore, isFirebaseConfigured } from "@/lib/firebase";
+import { dbFirestore, isFirebaseConfigured, subscribeToAuthChanges } from "@/lib/firebase";
 import { doc, setDoc } from "firebase/firestore";
 import { MarkdownMath } from "@/components/MarkdownMath";
 import { Button } from "@/components/ui/button";
@@ -42,7 +42,14 @@ export default function DeckOverviewPage({
   const [searchQuery, setSearchQuery] = useState("");
   const [copiedShareCode, setCopiedShareCode] = useState(false);
 
-  const userId = GUEST_USER_ID;
+  const [userId, setUserId] = useState<string>(GUEST_USER_ID);
+
+  useEffect(() => {
+    const unsub = subscribeToAuthChanges((user) => {
+      setUserId(user ? user.uid : GUEST_USER_ID);
+    });
+    return () => unsub();
+  }, []);
 
   // Reactive Dexie queries (0ms Local-First)
   const deck = useLiveQuery(() => db.decks.get(deckId), [deckId]);

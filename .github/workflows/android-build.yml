@@ -59,14 +59,31 @@ jobs:
         run: npx cap sync android
 
       - name: Build Android APK with Gradle
+        env:
+          BUILD_TYPE: ${{ inputs.build_type || (startsWith(github.ref, 'refs/tags/v') && 'release' || 'debug') }}
         run: |
           cd android
           chmod +x ./gradlew
-          ./gradlew assembleDebug --no-daemon --stacktrace
-          cd ..
-          mkdir -p output_apk
-          find android/app/build/outputs/apk -name "*.apk" -exec cp {} output_apk/zinapse-debug.apk \;
-          cp output_apk/zinapse-debug.apk ./zinapse-debug.apk || true
+          
+          mkdir -p ../output_apk
+          
+          if [ "$BUILD_TYPE" = "release" ]; then
+            echo "Building Release and Debug APKs..."
+            ./gradlew assembleRelease assembleDebug --no-daemon --stacktrace
+            cd ..
+            find android/app/build/outputs/apk/release -name "*.apk" -exec cp {} output_apk/zinapse-release-unsigned.apk \; || true
+            find android/app/build/outputs/apk/debug -name "*.apk" -exec cp {} output_apk/zinapse-debug.apk \; || true
+            cp output_apk/zinapse-debug.apk ./zinapse-debug.apk || true
+          else
+            echo "Building Debug APK..."
+            ./gradlew assembleDebug --no-daemon --stacktrace
+            cd ..
+            find android/app/build/outputs/apk/debug -name "*.apk" -exec cp {} output_apk/zinapse-debug.apk \; || true
+            cp output_apk/zinapse-debug.apk ./zinapse-debug.apk || true
+          fi
+          
+          echo "Generated APK files in output_apk/:"
+          ls -lh output_apk/ || true
 
       - name: Upload APK as Workflow Artifact
         uses: actions/upload-artifact@v4

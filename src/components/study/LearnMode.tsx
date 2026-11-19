@@ -1,127 +1,152 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   CheckCircle,
   XCircle,
-  ArrowRight,
+  AlertTriangle,
   RotateCw,
   ArrowLeft,
   Flame,
   Award,
+  Volume2,
+  ArrowRight,
   ArrowLeftRight,
 } from "lucide-react";
-import { type Card, type Deck, db } from "@/lib/db";
+import { type Card, type Deck } from "@/lib/db";
 import { rateCardFSRS, Rating } from "@/lib/fsrs";
+import { speakText } from "@/lib/speech";
+import { sound } from "@/lib/sound";
+import { checkAnswerWithFuzzy, type CheckAnswerResult } from "@/lib/levenshtein";
 import {
   hasCloze,
   renderClozeQuestion,
-  renderClozeAnswer,
   stripClozeSyntax,
   extractClozeItems,
 } from "@/lib/cloze";
 import { MarkdownMath } from "../MarkdownMath";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
 import confetti from "canvas-confetti";
 
-interface LearnModeProps {
+export type CardStage = 1 | 2 | 3; // 1 = Multiple Choice, 2 = Written Input, 3 = Mastered
+
+export interface LearnCardState {
+  card: Card;
+  stage: CardStage;
+  attempts: number;
+  streak: number;
+}
+
+export interface LearnModeProps {
   deck: Deck;
   cards: Card[];
   userId: string;
   onExit: () => void;
 }
 
-interface QuestionItem {
-  card: Card;
-  type: "choice" | "written";
-  prompt: string;
-  correctAnswer: string;
-  isCloze?: boolean;
-  options?: string[]; // 4 multiple choice options
-  correctIndex?: number;
-}
+export function LearnMode({
+  deck,
+  cards: initialCards,
+  userId,
+  onExit,
+}: LearnModeProps) {
+  const [cardsPool, setCardsPool] = useState<Card[]>(initialCards);
+  const [cardStates, setCardStates] = useState<Map<string, LearnCardState>>(new Map());
+  const [activeQueue, setActiveQueue] = useState<string[]>([]);
+  const [currentId, setCurrentId] = useState<string | null>(null);
 
-export function LearnMode({ deck, cards, userId, onExit }: LearnModeProps) {
-  const [queue, setQueue] = useState<Card[]>([]);
-  const [currentQuestion, setCurrentQuestion] = useState<QuestionItem | null>(null);
-  const [selectedChoice, setSelectedChoice] = useState<number | null>(null);
-  const [writtenAnswer, setWrittenAnswer] = useState("");
+  // Question state
+  const [mcOptions, setMcOptions] = useState<string[]>([]);
+  const [mcCorrectIndex, setMcCorrectIndex] = useState<number>(0);
+  const [selectedMcIndex, setSelectedMcIndex] = useState<number | null>(null);
+
+  const [writtenInput, setWrittenInput] = useState("");
+  const [fuzzyResult, setFuzzyResult] = useState<CheckAnswerResult | null>(null);
+
   const [isAnswered, setIsAnswered] = useState(false);
-  const [isCorrect, setIsCorrect] = useState(false);
+  const [isSuccess, setIsSuccess] = useState(false);
   const [isReversed, setIsReversed] = useState(false);
-  const [streak, setStreak] = useState(0);
-  const [correctCount, setCorrectCount] = useState(0);
-  const [totalAttempted, setTotalAttempted] = useState(0);
-  const [isFinished, setIsFinished] = useState(false);
+  const [sessionStreak, setSessionStreak] = useState(0);
+  const [totalStepsCompleted, setTotalStepsCompleted] = useState(0);
   const [loading, setLoading] = useState(true);
 
-  // Initialize learning queue prioritizing due cards
-  useEffect(() => {
-    async function initQueue() {
-      if (cards.length === 0) {
-        setLoading(false);
-        return;
-      }
+  // Initialize Learn Session
+  const initLearnSession = useCallback(() => {
+    setLoading(true);
+    setCardsPool(initialCards);
 
-      const states = await db.fsrs_states.where("deckId").equals(deck.id).toArray();
-      const userStates = states.filter((s) => s.userId === userId);
-      const stateMap = new Map(userStates.map((s) => [s.cardId, s]));
-
-      // Sort: due cards first, then learning, then new
-      const sorted = [...cards].sort((a, b) => {
-        const sa = stateMap.get(a.id);
-        const sb = stateMap.get(b.id);
-        const aDue = sa ? (sa.due instanceof Date ? sa.due.getTime() : sa.due) : 0;
-        const bDue = sb ? (sb.due instanceof Date ? sb.due.getTime() : sb.due) : 0;
-        return aDue - bDue;
-      });
-
-      setQueue(sorted);
+    if (initialCards.length === 0) {
       setLoading(false);
-    }
-
-    initQueue();
-  }, [cards, deck.id, userId]);
-
-  // Load next question whenever queue changes
-  useEffect(() => {
-    if (loading) return;
-
-    if (queue.length === 0) {
-      if (totalAttempted > 0) {
-        setIsFinished(true);
-        confetti({ particleCount: 100, spread: 80, origin: { y: 0.6 } });
-      }
       return;
     }
 
-    const nextCard = queue[0];
-    const isCloze = hasCloze(nextCard.term || nextCard.front || "");
-    const clozeItems = isCloze ? extractClozeItems(nextCard.term || nextCard.front || "") : [];
+    const stateMap = new Map<string, LearnCardState>();
+    const queueIds: string[] = [];
 
-    let questionPrompt = "";
-    let correctAns = "";
+    // Shuffle cards for varied learning order
+    const shuffled = [...initialCards].sort(() => Math.random() - 0.5);
 
-    if (isCloze) {
-      questionPrompt = renderClozeQuestion(nextCard.term || nextCard.front || "");
-      correctAns = clozeItems[0]?.answer || nextCard.definition || nextCard.back || "";
-    } else if (isReversed) {
-      questionPrompt = nextCard.definition || nextCard.back || "";
-      correctAns = nextCard.term || nextCard.front || "";
-    } else {
-      questionPrompt = nextCard.term || nextCard.front || "";
-      correctAns = nextCard.definition || nextCard.back || "";
+    shuffled.forEach((c) => {
+      stateMap.set(c.id, {
+        card: c,
+        stage: 1, // Start with Stage 1: Multiple Choice
+        attempts: 0,
+        streak: 0,
+      });
+      queueIds.push(c.id);
+    });
+
+    setCardStates(stateMap);
+    setActiveQueue(queueIds);
+    setTotalStepsCompleted(0);
+    setSessionStreak(0);
+    setLoading(false);
+  }, [initialCards]);
+
+  useEffect(() => {
+    initLearnSession();
+  }, [initLearnSession]);
+
+  // Set up question when activeQueue or currentId changes
+  useEffect(() => {
+    if (loading || activeQueue.length === 0) {
+      setCurrentId(null);
+      return;
     }
 
-    const isMultipleChoice = cards.length >= 4;
+    const nextCardId = activeQueue[0];
+    const currentState = cardStates.get(nextCardId);
+    if (!currentState) return;
 
-    if (isMultipleChoice) {
-      // Pick 3 distractor answers from other cards
-      const otherCards = cards.filter((c) => c.id !== nextCard.id);
+    setCurrentId(nextCardId);
+    setIsAnswered(false);
+    setSelectedMcIndex(null);
+    setWrittenInput("");
+    setFuzzyResult(null);
+
+    const card = currentState.card;
+    const isCloze = !isReversed && hasCloze(card.term || card.front || "");
+    const clozeItems = isCloze ? extractClozeItems(card.term || card.front || "") : [];
+
+    let correctDef = "";
+    if (isCloze) {
+      correctDef = clozeItems[0]?.answer || card.definition || card.back || "";
+    } else if (isReversed) {
+      correctDef = stripClozeSyntax(card.term || card.front || "");
+    } else {
+      correctDef = card.definition || card.back || "";
+    }
+
+    if (currentState.stage === 1) {
+      // Stage 1: Prepare 4 multiple choice options
+      const otherCards = cardsPool.filter((c) => c.id !== card.id);
       const shuffledOthers = [...otherCards].sort(() => Math.random() - 0.5);
       const distractors = shuffledOthers.slice(0, 3).map((c) => {
         if (isCloze) {
           const items = extractClozeItems(c.term || c.front || "");
-          return items[0]?.answer || c.term || c.front || c.definition || c.back || "";
+          return items[0]?.answer || c.definition || c.back || c.term || "";
         } else if (isReversed) {
           return stripClozeSyntax(c.term || c.front || "");
         } else {
@@ -129,368 +154,504 @@ export function LearnMode({ deck, cards, userId, onExit }: LearnModeProps) {
         }
       });
 
-      const allChoices = [...distractors, correctAns].sort(() => Math.random() - 0.5);
-      const correctIdx = allChoices.indexOf(correctAns);
+      // If fewer than 3 other cards in deck, fill with generic options
+      let fallbackIndex = 1;
+      while (distractors.length < 3) {
+        distractors.push(`Вариант ${fallbackIndex++}`);
+      }
 
-      setCurrentQuestion({
-        card: nextCard,
-        type: "choice",
-        prompt: questionPrompt,
-        correctAnswer: correctAns,
-        isCloze,
-        options: allChoices,
-        correctIndex: correctIdx,
-      });
-    } else {
-      setCurrentQuestion({
-        card: nextCard,
-        type: "written",
-        prompt: questionPrompt,
-        correctAnswer: correctAns,
-        isCloze,
-      });
+      const allChoices = [...distractors, correctDef].sort(() => Math.random() - 0.5);
+      const correctIdx = allChoices.indexOf(correctDef);
+
+      setMcOptions(allChoices);
+      setMcCorrectIndex(correctIdx);
     }
+  }, [activeQueue, cardStates, cardsPool, loading, isReversed]);
 
-    setIsAnswered(false);
-    setSelectedChoice(null);
-    setWrittenAnswer("");
-  }, [queue, loading, cards, totalAttempted, isReversed]);
+  const currentItem = currentId ? cardStates.get(currentId) : null;
+  const currentCard = currentItem?.card;
+  const currentStage = currentItem?.stage || 1;
 
-  const handleSelectChoice = (index: number) => {
-    if (isAnswered || !currentQuestion) return;
+  // Determine prompt and expected answer
+  const isClozeCard = currentCard && !isReversed && hasCloze(currentCard.term || currentCard.front || "");
+  const clozeItems = isClozeCard && currentCard ? extractClozeItems(currentCard.term || currentCard.front || "") : [];
 
-    const correct = index === currentQuestion.correctIndex;
-    setSelectedChoice(index);
+  const promptText = currentCard
+    ? isClozeCard
+      ? renderClozeQuestion(currentCard.term || currentCard.front || "")
+      : isReversed
+      ? currentCard.definition || currentCard.back || ""
+      : currentCard.term || currentCard.front || ""
+    : "";
+
+  const expectedAnswer = currentCard
+    ? isClozeCard
+      ? clozeItems[0]?.answer || currentCard.definition || currentCard.back || ""
+      : isReversed
+      ? stripClozeSyntax(currentCard.term || currentCard.front || "")
+      : currentCard.definition || currentCard.back || ""
+    : "";
+
+  // Handle Stage 1: Multiple Choice selection
+  const handleSelectOption = useCallback(
+    (index: number) => {
+      if (isAnswered || !currentId || !currentItem) return;
+
+      const correct = index === mcCorrectIndex;
+      setSelectedMcIndex(index);
+      setIsAnswered(true);
+      setIsSuccess(correct);
+
+      if (correct) {
+        sound.playSuccess();
+        setSessionStreak((s) => s + 1);
+        rateCardFSRS(currentId, deck.id, userId, Rating.Good);
+      } else {
+        sound.playError();
+        setSessionStreak(0);
+        rateCardFSRS(currentId, deck.id, userId, Rating.Again);
+      }
+    },
+    [currentId, currentItem, deck.id, isAnswered, mcCorrectIndex, userId]
+  );
+
+  // Handle Stage 2: Written submission with Levenshtein fuzzy checking
+  const handleWrittenSubmit = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (isAnswered || !currentId || !currentItem || !currentCard) return;
+
+    const result = checkAnswerWithFuzzy(writtenInput, expectedAnswer);
+    setFuzzyResult(result);
     setIsAnswered(true);
-    setIsCorrect(correct);
-    setTotalAttempted((n) => n + 1);
 
-    if (correct) {
-      setCorrectCount((n) => n + 1);
-      setStreak((s) => s + 1);
-      rateCardFSRS(currentQuestion.card.id, deck.id, userId, Rating.Good);
+    if (result.isExact) {
+      sound.playSuccess();
+      setIsSuccess(true);
+      setSessionStreak((s) => s + 1);
+      rateCardFSRS(currentId, deck.id, userId, Rating.Good);
+    } else if (result.isClose) {
+      // Typo detected: let user decide with "Засчитать мой ответ"
+      sound.playError();
+      setIsSuccess(false);
     } else {
-      setStreak(0);
-      rateCardFSRS(currentQuestion.card.id, deck.id, userId, Rating.Again);
+      sound.playError();
+      setIsSuccess(false);
+      setSessionStreak(0);
+      rateCardFSRS(currentId, deck.id, userId, Rating.Again);
     }
   };
 
-  const handleWrittenSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (isAnswered || !currentQuestion || !writtenAnswer.trim()) return;
-
-    const cleanInput = writtenAnswer.trim().toLowerCase().replace(/[.,!?'"`$]/g, "");
-    const cleanTarget = (currentQuestion.correctAnswer || "")
-      .trim()
-      .toLowerCase()
-      .replace(/[.,!?'"`$]/g, "");
-
-    const correct = cleanInput === cleanTarget || (cleanTarget.length > 3 && cleanTarget.includes(cleanInput));
-
-    setIsAnswered(true);
-    setIsCorrect(correct);
-    setTotalAttempted((n) => n + 1);
-
-    if (correct) {
-      setCorrectCount((n) => n + 1);
-      setStreak((s) => s + 1);
-      rateCardFSRS(currentQuestion.card.id, deck.id, userId, Rating.Good);
-    } else {
-      setStreak(0);
-      rateCardFSRS(currentQuestion.card.id, deck.id, userId, Rating.Again);
-    }
+  // Overriding a typo to count as correct (Appeal button)
+  const handleOverrideCorrect = () => {
+    if (!currentId) return;
+    sound.playSuccess();
+    setIsSuccess(true);
+    setSessionStreak((s) => s + 1);
+    rateCardFSRS(currentId, deck.id, userId, Rating.Good);
   };
 
-  const handleProceedNext = () => {
-    if (!currentQuestion) return;
+  // Transition to next question in active queue
+  const handleProceedNext = useCallback(() => {
+    if (!currentId || !currentItem) return;
 
-    if (isCorrect) {
-      // Remove learned card from active queue
-      setQueue((prev) => prev.slice(1));
+    const nextStates = new Map(cardStates);
+
+    if (isSuccess) {
+      setTotalStepsCompleted((n) => n + 1);
+
+      if (currentStage === 1) {
+        // Advanced from Stage 1 to Stage 2: Written input
+        nextStates.set(currentId, {
+          ...currentItem,
+          stage: 2,
+          attempts: currentItem.attempts + 1,
+        });
+        // Move to the back of the queue to practice writing it later
+        setActiveQueue((prev) => [...prev.slice(1), currentId]);
+      } else if (currentStage === 2) {
+        // Mastered!
+        nextStates.set(currentId, {
+          ...currentItem,
+          stage: 3,
+          attempts: currentItem.attempts + 1,
+        });
+        // Remove from active queue
+        const remaining = activeQueue.slice(1);
+        setActiveQueue(remaining);
+
+        if (remaining.length === 0) {
+          sound.playVictory();
+          confetti({ particleCount: 120, spread: 85, origin: { y: 0.6 } });
+        }
+      }
     } else {
-      // Re-queue card to the end of the session to ensure recall!
-      setQueue((prev) => [...prev.slice(1), currentQuestion.card]);
+      // Made an error: reset to Stage 1 and re-queue at end
+      nextStates.set(currentId, {
+        ...currentItem,
+        stage: 1,
+        attempts: currentItem.attempts + 1,
+      });
+      setActiveQueue((prev) => [...prev.slice(1), currentId]);
     }
+
+    setCardStates(nextStates);
+  }, [activeQueue, cardStates, currentId, currentItem, currentStage, isSuccess]);
+
+  // Audio Speech (TTS)
+  const handleTTS = () => {
+    if (!currentCard) return;
+    const textToSpeak = isAnswered ? expectedAnswer : promptText;
+    speakText(textToSpeak);
   };
+
+  // Hotkeys 1-4 for Stage 1 selection, Enter/Space for proceed
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement
+      ) {
+        return;
+      }
+
+      if (currentStage === 1 && !isAnswered) {
+        if (e.key === "1") handleSelectOption(0);
+        else if (e.key === "2") handleSelectOption(1);
+        else if (e.key === "3") handleSelectOption(2);
+        else if (e.key === "4") handleSelectOption(3);
+      } else if (isAnswered && (e.key === "Enter" || e.code === "Space")) {
+        e.preventDefault();
+        handleProceedNext();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [currentStage, isAnswered, handleSelectOption, handleProceedNext]);
+
+  // Calculations for progress
+  const totalCards = cardsPool.length;
+  const masteredCards = Array.from(cardStates.values()).filter(
+    (s) => s.stage === 3
+  ).length;
+  const progressPercent =
+    totalCards > 0 ? Math.round((masteredCards / totalCards) * 100) : 0;
+  const isAllMastered = activeQueue.length === 0 && totalCards > 0;
 
   if (loading) {
     return (
       <div className="py-20 text-center text-zinc-500">
-        Загрузка очереди интервального повторения...
+        Загрузка режима заучивания...
       </div>
     );
   }
 
-  if (isFinished) {
-    const accuracy = Math.round((correctCount / Math.max(1, totalAttempted)) * 100);
+  if (totalCards === 0) {
     return (
-      <div className="max-w-md mx-auto py-12 px-4 text-center space-y-6">
-        <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center text-white mx-auto shadow-lg shadow-indigo-500/25">
-          <Award className="w-8 h-8" />
-        </div>
-
-        <div className="space-y-2">
-          <h2 className="text-2xl font-black text-zinc-900 dark:text-white">
-            Сессия завершена!
-          </h2>
-          <p className="text-sm text-zinc-500 dark:text-zinc-400">
-            Отличная работа! Вы прошли всю очередь карточек и запланировали даты будущих повторений.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3 p-4 rounded-2xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800">
-          <div>
-            <div className="text-2xl font-black text-indigo-600 dark:text-indigo-400">
-              {accuracy}%
-            </div>
-            <div className="text-xs text-zinc-500">Точность с первой попытки</div>
-          </div>
-          <div>
-            <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400">
-              {correctCount}
-            </div>
-            <div className="text-xs text-zinc-500">Карточек освоено</div>
-          </div>
-        </div>
-
-        <div className="flex justify-center space-x-3 pt-2">
-          <button
-            onClick={() => {
-              setIsFinished(false);
-              setTotalAttempted(0);
-              setCorrectCount(0);
-              setQueue([...cards]);
-            }}
-            className="flex items-center space-x-2 px-4 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-sm font-semibold transition"
-          >
-            <RotateCw className="w-4 h-4" />
-            <span>Тренироваться еще</span>
-          </button>
-          <button
-            onClick={onExit}
-            className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold shadow-sm transition"
-          >
-            Назад к колоде
-          </button>
-        </div>
+      <div className="max-w-md mx-auto py-16 text-center space-y-4">
+        <h3 className="text-lg font-bold text-zinc-900 dark:text-white">Колода пуста</h3>
+        <p className="text-sm text-zinc-500">
+          Для запуска режима заучивания добавьте карточки в колоду.
+        </p>
+        <button
+          onClick={onExit}
+          className="px-4 py-2 text-sm rounded-lg bg-indigo-600 text-white font-medium"
+        >
+          Вернуться к колоде
+        </button>
       </div>
     );
   }
-
-  if (!currentQuestion) return null;
 
   return (
-    <div className="max-w-2xl mx-auto px-4 py-4 space-y-6">
+    <div className="max-w-3xl mx-auto px-4 py-4 space-y-6">
       {/* Top Header */}
       <div className="flex items-center justify-between">
         <button
           onClick={onExit}
-          className="flex items-center space-x-1.5 text-xs font-medium text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition"
+          className="flex items-center space-x-1.5 text-xs font-semibold text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition"
         >
           <ArrowLeft className="w-4 h-4" />
-          <span>Выйти из режима</span>
+          <span>Выйти из Заучивания</span>
         </button>
 
         <div className="flex items-center space-x-3">
+          {sessionStreak > 1 && (
+            <div className="flex items-center space-x-1 px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 font-bold text-xs border border-amber-500/20">
+              <Flame className="w-3.5 h-3.5 fill-current" />
+              <span>{sessionStreak} подряд</span>
+            </div>
+          )}
+
           <button
             onClick={() => {
               setIsReversed((r) => !r);
-              setIsAnswered(false);
-              setSelectedChoice(null);
-              setWrittenAnswer("");
             }}
-            className={`p-1.5 rounded-lg border text-xs transition flex items-center space-x-1.5 ${
+            className={`p-1.5 rounded-lg border transition ${
               isReversed
                 ? "bg-indigo-50 border-indigo-300 dark:bg-indigo-950/60 dark:border-indigo-800 text-indigo-600 dark:text-indigo-400 font-semibold"
-                : "border-zinc-200 dark:border-zinc-800 text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                : "border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-900"
             }`}
-            title="Обратный режим (Определение → Термин)"
+            title="Обратный режим"
           >
-            <ArrowLeftRight className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Обратный</span>
+            <ArrowLeftRight className="w-4 h-4" />
           </button>
 
-          {streak > 1 && (
-            <div className="flex items-center space-x-1 px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 text-xs font-bold border border-amber-500/20 animate-pulse">
-              <Flame className="w-3.5 h-3.5 fill-current" />
-              <span>Серия: {streak}</span>
-            </div>
-          )}
-          <span className="text-xs font-semibold text-zinc-500">
-            Осталось в очереди: {queue.length}
-          </span>
+          <Badge variant="outline" className="text-xs font-mono">
+            Осталось: {activeQueue.length}
+          </Badge>
         </div>
       </div>
 
-      {/* Question Card */}
-      <div className="p-6 sm:p-8 rounded-3xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-sm space-y-4">
-        <div className="flex items-center justify-between text-xs text-zinc-400">
-          <div className="flex items-center space-x-2">
-            <span className="uppercase tracking-widest font-semibold text-indigo-500">
-              {currentQuestion.isCloze
-                ? "Заполните пропуск (Cloze)"
-                : isReversed
-                ? "Определение → Термин"
-                : "Вопрос / Термин"}
+      {/* Progress Bar & Stage Indicator */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between text-xs font-semibold text-zinc-500">
+          <span className="flex items-center space-x-2">
+            <span className="font-bold text-indigo-600 dark:text-indigo-400">
+              Усвоение: {progressPercent}%
             </span>
-            {currentQuestion.isCloze && (
-              <span className="px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 text-[10px] font-bold">
-                Cloze
+            <span>
+              ({masteredCards} из {totalCards} выучено)
+            </span>
+          </span>
+
+          {!isAllMastered && currentStage && (
+            <Badge
+              variant={currentStage === 1 ? "secondary" : "default"}
+              className="text-[10px]"
+            >
+              {currentStage === 1
+                ? "Этап 1: Выбор варианта"
+                : "Этап 2: Письменный ввод"}
+            </Badge>
+          )}
+        </div>
+
+        <Progress value={progressPercent} className="h-2" />
+      </div>
+
+      {/* Victory Screen */}
+      {isAllMastered ? (
+        <div className="my-auto py-12 px-4 text-center space-y-6 animate-in zoom-in-95 duration-200">
+          <div className="w-20 h-20 rounded-3xl bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center text-white mx-auto shadow-2xl shadow-indigo-500/25">
+            <Award className="w-10 h-10" />
+          </div>
+
+          <div className="space-y-2">
+            <h2 className="text-3xl font-black text-zinc-900 dark:text-white">
+              100% карточек усвоено!
+            </h2>
+            <p className="text-sm text-zinc-500 max-w-md mx-auto">
+              Поздравляем! Вы успешно прошли оба этапа (тестовый и письменный) для всех карточек этой колоды.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 max-w-xs mx-auto p-4 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800">
+            <div>
+              <div className="text-2xl font-black text-indigo-600 dark:text-indigo-400">
+                {totalCards}
+              </div>
+              <div className="text-[11px] text-zinc-500">Выучено</div>
+            </div>
+            <div>
+              <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400">
+                {totalStepsCompleted}
+              </div>
+              <div className="text-[11px] text-zinc-500">Шагов проверки</div>
+            </div>
+          </div>
+
+          <div className="flex justify-center space-x-3 pt-2">
+            <Button variant="outline" onClick={initLearnSession}>
+              <RotateCw className="w-4 h-4 mr-1.5" />
+              Пройти заново
+            </Button>
+            <Button onClick={onExit} className="bg-indigo-600 hover:bg-indigo-500 text-white">
+              Назад к колоде
+            </Button>
+          </div>
+        </div>
+      ) : currentCard ? (
+        /* Active Question Card */
+        <div className="space-y-6">
+          {/* Question Card Box */}
+          <div className="p-6 sm:p-8 rounded-3xl bg-white dark:bg-zinc-900 border-2 border-zinc-200 dark:border-zinc-800 shadow-sm space-y-4">
+            <div className="flex items-center justify-between text-xs text-zinc-400">
+              <span className="uppercase tracking-widest font-bold text-indigo-500">
+                {isReversed ? "Определение" : isClozeCard ? "Текст с пропуском" : "Термин"}
               </span>
+              <button
+                type="button"
+                onClick={handleTTS}
+                className="p-1 text-zinc-400 hover:text-indigo-500 transition"
+                title="Озвучить"
+              >
+                <Volume2 className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="text-xl sm:text-2xl font-medium text-zinc-900 dark:text-white leading-relaxed">
+              <MarkdownMath content={promptText} />
+            </div>
+
+            {(isReversed
+              ? currentCard.backImage
+              : currentCard.imageData || currentCard.frontImage) && (
+              <img
+                src={
+                  isReversed
+                    ? currentCard.backImage
+                    : currentCard.imageData || currentCard.frontImage
+                }
+                alt="Иллюстрация"
+                className="mt-2 max-h-48 rounded-xl object-contain shadow-sm border border-zinc-100 dark:border-zinc-800"
+              />
             )}
           </div>
-          {currentQuestion.card.hint && (
-            <span className="text-amber-600 dark:text-amber-400 italic">
-              Подсказка: {currentQuestion.card.hint}
-            </span>
-          )}
-        </div>
 
-        <div className="text-lg sm:text-xl font-medium text-zinc-900 dark:text-white leading-relaxed">
-          <MarkdownMath content={currentQuestion.prompt} />
-        </div>
+          {/* Interactive Answer Area */}
+          {currentStage === 1 ? (
+            /* STAGE 1: Multiple Choice Options */
+            <div className="space-y-3">
+              <div className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">
+                Выберите правильный вариант:
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {mcOptions.map((opt, idx) => {
+                  let btnStyle =
+                    "border-zinc-200 dark:border-zinc-800 hover:border-indigo-500/50 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100";
 
-        {(isReversed
-          ? currentQuestion.card.backImage || currentQuestion.card.imageData || currentQuestion.card.frontImage
-          : currentQuestion.card.imageData || currentQuestion.card.frontImage) && (
-          <img
-            src={
-              isReversed
-                ? currentQuestion.card.backImage ||
-                  currentQuestion.card.imageData ||
-                  currentQuestion.card.frontImage
-                : currentQuestion.card.imageData || currentQuestion.card.frontImage
-            }
-            alt="Question illustration"
-            className="max-h-48 mx-auto rounded-xl object-contain shadow-sm mt-3"
-          />
-        )}
-      </div>
+                  if (isAnswered) {
+                    if (idx === mcCorrectIndex) {
+                      btnStyle =
+                        "border-emerald-500 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 font-semibold";
+                    } else if (idx === selectedMcIndex && !isSuccess) {
+                      btnStyle =
+                        "border-red-500 bg-red-50 dark:bg-red-950/40 text-red-800 dark:text-red-300";
+                    } else {
+                      btnStyle = "opacity-40 border-zinc-200 dark:border-zinc-800";
+                    }
+                  }
 
-      {/* Answer Area */}
-      {currentQuestion.type === "choice" && currentQuestion.options ? (
-        <div className="space-y-2.5">
-          {currentQuestion.options.map((option, idx) => {
-            const isSelected = selectedChoice === idx;
-            const isTheCorrectChoice = idx === currentQuestion.correctIndex;
-
-            let buttonStyle =
-              "border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:border-indigo-400 dark:hover:border-indigo-600 text-zinc-800 dark:text-zinc-200";
-
-            if (isAnswered) {
-              if (isTheCorrectChoice) {
-                buttonStyle =
-                  "border-emerald-500 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 font-semibold";
-              } else if (isSelected) {
-                buttonStyle =
-                  "border-red-500 bg-red-50 dark:bg-red-950/40 text-red-800 dark:text-red-300";
-              } else {
-                buttonStyle = "opacity-40 border-zinc-200 dark:border-zinc-800";
-              }
-            }
-
-            return (
-              <button
-                key={idx}
-                disabled={isAnswered}
-                onClick={() => handleSelectChoice(idx)}
-                className={`w-full p-4 rounded-2xl border text-left flex items-start space-x-3 transition active:scale-[0.99] ${buttonStyle}`}
-              >
-                <span className="w-6 h-6 rounded-lg bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-xs font-bold text-zinc-600 dark:text-zinc-400 mt-0.5 shrink-0">
-                  {["A", "B", "C", "D"][idx]}
-                </span>
-                <div className="flex-1 text-sm sm:text-base">
-                  <MarkdownMath content={option} />
+                  return (
+                    <button
+                      key={idx}
+                      type="button"
+                      disabled={isAnswered}
+                      onClick={() => handleSelectOption(idx)}
+                      className={`p-4 rounded-2xl border text-left flex items-start space-x-3 transition active:scale-[0.98] ${btnStyle}`}
+                    >
+                      <span className="flex-shrink-0 w-6 h-6 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-500 text-xs font-bold flex items-center justify-center">
+                        {idx + 1}
+                      </span>
+                      <div className="text-sm leading-snug flex-1">
+                        <MarkdownMath content={opt} />
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            /* STAGE 2: Written Input */
+            <div className="space-y-4">
+              <form onSubmit={handleWrittenSubmit} className="space-y-3">
+                <div className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">
+                  Введите точный ответ:
                 </div>
-                {isAnswered && isTheCorrectChoice && (
-                  <CheckCircle className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5" />
-                )}
-                {isAnswered && isSelected && !isTheCorrectChoice && (
-                  <XCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
-                )}
-              </button>
-            );
-          })}
-        </div>
-      ) : (
-        /* Written Input */
-        <form onSubmit={handleWrittenSubmit} className="space-y-3">
-          <input
-            type="text"
-            disabled={isAnswered}
-            value={writtenAnswer}
-            onChange={(e) => setWrittenAnswer(e.target.value)}
-            placeholder="Введите ответ здесь..."
-            className="w-full p-4 rounded-2xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-white text-base focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            autoFocus
-          />
-          {!isAnswered && (
-            <button
-              type="submit"
-              disabled={!writtenAnswer.trim()}
-              className="w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold shadow-sm transition disabled:opacity-50"
-            >
-              Проверить ответ
-            </button>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={writtenInput}
+                    disabled={isAnswered}
+                    onChange={(e) => setWrittenInput(e.target.value)}
+                    placeholder="Напечатайте ответ здесь..."
+                    className="flex-1 px-4 py-3 rounded-2xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-base"
+                    autoFocus
+                  />
+                  {!isAnswered && (
+                    <Button
+                      type="submit"
+                      disabled={!writtenInput.trim()}
+                      className="px-6 py-3 h-auto rounded-2xl font-semibold bg-indigo-600 hover:bg-indigo-500 text-white"
+                    >
+                      Ответить
+                    </Button>
+                  )}
+                </div>
+              </form>
+            </div>
           )}
-        </form>
-      )}
 
-      {/* Answer Feedback & Proceed */}
-      {isAnswered && (
-        <div
-          className={`p-5 rounded-2xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in duration-200 ${
-            isCorrect
-              ? "bg-emerald-50/70 dark:bg-emerald-950/30 border-emerald-300 dark:border-emerald-800"
-              : "bg-red-50/70 dark:bg-red-950/30 border-red-300 dark:border-red-800"
-          }`}
-        >
-          <div className="space-y-1">
-            <div className="flex items-center space-x-1.5 font-bold text-sm">
-              {isCorrect ? (
-                <>
-                  <CheckCircle className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                  <span className="text-emerald-700 dark:text-emerald-300">
-                    Верно! Дата повторения перенесена вперед
-                  </span>
-                </>
-              ) : (
-                <>
-                  <XCircle className="w-4 h-4 text-red-600 dark:text-red-400" />
-                  <span className="text-red-700 dark:text-red-300">
-                    Не совсем! Карточка вернется в конец очереди
-                  </span>
-                </>
+          {/* Feedback & Result Bar */}
+          {isAnswered && (
+            <div
+              className={`p-5 rounded-2xl border space-y-3 animate-in fade-in duration-200 ${
+                isSuccess
+                  ? "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/60"
+                  : "bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800/60"
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  {isSuccess ? (
+                    <>
+                      <CheckCircle className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                      <span className="font-bold text-sm text-emerald-800 dark:text-emerald-300">
+                        Отлично! Ответ верный
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <XCircle className="w-5 h-5 text-red-600 dark:text-red-400" />
+                      <span className="font-bold text-sm text-red-800 dark:text-red-300">
+                        Не совсем точно
+                      </span>
+                    </>
+                  )}
+                </div>
+
+                <Button
+                  onClick={handleProceedNext}
+                  className="font-semibold gap-1.5 shadow-sm bg-indigo-600 hover:bg-indigo-500 text-white"
+                >
+                  <span>Дальше</span>
+                  <ArrowRight className="w-4 h-4" />
+                </Button>
+              </div>
+
+              {!isSuccess && (
+                <div className="pt-2 border-t border-red-200 dark:border-red-900/40 text-xs space-y-1.5">
+                  <div>
+                    <span className="text-zinc-500">Правильный ответ: </span>
+                    <span className="font-semibold text-emerald-700 dark:text-emerald-300 text-sm">
+                      {expectedAnswer}
+                    </span>
+                  </div>
+
+                  {fuzzyResult && fuzzyResult.isClose && (
+                    <div className="flex items-center justify-between pt-2">
+                      <div className="flex items-center space-x-1.5 text-amber-600 dark:text-amber-400">
+                        <AlertTriangle className="w-4 h-4" />
+                        <span>Обнаружена опечатка (расстояние Левенштейна: {fuzzyResult.distance})</span>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={handleOverrideCorrect}
+                        className="text-xs border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-950"
+                      >
+                        Засчитать мой ответ (Я был прав)
+                      </Button>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
-            {!isCorrect && (
-              <div className="text-xs text-zinc-700 dark:text-zinc-300 space-y-1">
-                <div>
-                  <span className="font-semibold">Правильный ответ: </span>
-                  <MarkdownMath content={currentQuestion.correctAnswer} />
-                </div>
-                {currentQuestion.isCloze && (
-                  <div className="text-[11px] text-zinc-500 dark:text-zinc-400">
-                    <MarkdownMath
-                      content={renderClozeAnswer(
-                        currentQuestion.card.term || currentQuestion.card.front || ""
-                      )}
-                    />
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          <button
-            onClick={handleProceedNext}
-            className="flex items-center space-x-1 px-5 py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 dark:bg-white dark:hover:bg-zinc-200 text-white dark:text-zinc-900 text-sm font-semibold transition shrink-0"
-          >
-            <span>Продолжить</span>
-            <ArrowRight className="w-4 h-4" />
-          </button>
+          )}
         </div>
-      )}
+      ) : null}
     </div>
   );
 }

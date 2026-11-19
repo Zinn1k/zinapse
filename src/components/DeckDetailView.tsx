@@ -104,6 +104,7 @@ export function DeckDetailView({ deckId, userId, onBack }: DeckDetailViewProps) 
       <MatchMode
         deck={deck}
         cards={cardList}
+        userId={userId}
         onExit={() => setActiveMode("none")}
       />
     );
@@ -114,6 +115,7 @@ export function DeckDetailView({ deckId, userId, onBack }: DeckDetailViewProps) 
       <TestMode
         deck={deck}
         cards={cardList}
+        userId={userId}
         onExit={() => setActiveMode("none")}
       />
     );

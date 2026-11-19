@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { motion } from "framer-motion";
+import { motion, type PanInfo } from "framer-motion";
 import {
   RotateCw,
   ChevronLeft,
@@ -14,11 +14,15 @@ import {
   CheckCircle,
   ArrowLeft,
   ArrowLeftRight,
+  Clock,
+  Zap,
+  Sparkles,
 } from "lucide-react";
 import { type Card, type Deck } from "@/lib/db";
 import {
   rateCardFSRS,
   getFSRSIntervalPreviews,
+  getTodayFSRSQueue,
   Rating,
   type IntervalPreview,
 } from "@/lib/fsrs";
@@ -30,9 +34,13 @@ import {
   stripClozeSyntax,
 } from "@/lib/cloze";
 import { MarkdownMath } from "../MarkdownMath";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import confetti from "canvas-confetti";
 
-interface FlashcardsModeProps {
+export type StudyModeType = "fsrs" | "cram";
+
+export interface FlashcardsModeProps {
   deck: Deck;
   cards: Card[];
   userId: string;
@@ -45,7 +53,8 @@ export function FlashcardsMode({
   userId,
   onExit,
 }: FlashcardsModeProps) {
-  const [cards, setCards] = useState<Card[]>(initialCards);
+  const [mode, setMode] = useState<StudyModeType>("fsrs");
+  const [queue, setQueue] = useState<Card[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
   const [isReversed, setIsReversed] = useState(false);
@@ -53,48 +62,127 @@ export function FlashcardsMode({
   const [showHint, setShowHint] = useState(false);
   const [intervals, setIntervals] = useState<IntervalPreview[]>([]);
   const [isCompleted, setIsCompleted] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  const currentCard = cards[currentIndex];
+  // Load study queue based on mode
+  const loadQueue = useCallback(
+    async (selectedMode: StudyModeType) => {
+      setLoading(true);
+      setIsCompleted(false);
+      setCurrentIndex(0);
+      setIsFlipped(false);
+      setShowHint(false);
 
-  // Load FSRS projected intervals for current card
+      if (initialCards.length === 0) {
+        setQueue([]);
+        setLoading(false);
+        return;
+      }
+
+      if (selectedMode === "fsrs") {
+        const todayQueue = await getTodayFSRSQueue(deck.id, userId, Math.max(50, initialCards.length));
+        setQueue(todayQueue);
+      } else {
+        // Cram mode: all cards shuffled or in order
+        setQueue([...initialCards]);
+      }
+      setLoading(false);
+    },
+    [deck.id, initialCards, userId]
+  );
+
   useEffect(() => {
-    if (!currentCard) return;
+    loadQueue(mode);
+  }, [loadQueue, mode]);
+
+  const currentCard = queue[currentIndex];
+
+  // Load projected intervals for current card in FSRS mode
+  useEffect(() => {
+    if (!currentCard || mode !== "fsrs") return;
     setIsFlipped(false);
     setShowHint(false);
 
-    getFSRSIntervalPreviews(currentCard.id, deck.id, userId).then((previews) => {
-      setIntervals(previews);
-    });
-  }, [currentCard, deck.id, userId]);
-
-  const handleNext = useCallback(() => {
-    if (currentIndex < cards.length - 1) {
-      setCurrentIndex((i) => i + 1);
-    } else {
-      setIsCompleted(true);
-      confetti({ particleCount: 80, spread: 70, origin: { y: 0.6 } });
-    }
-  }, [currentIndex, cards.length]);
-
-  const handlePrev = useCallback(() => {
-    if (currentIndex > 0) {
-      setCurrentIndex((i) => i - 1);
-    }
-  }, [currentIndex]);
+    getFSRSIntervalPreviews(currentCard.id, deck.id, userId, 0.9, "ru").then(
+      (previews) => {
+        setIntervals(previews);
+      }
+    );
+  }, [currentCard, deck.id, userId, mode]);
 
   const handleFlip = useCallback(() => {
     setIsFlipped((f) => !f);
   }, []);
 
-  const handleRate = useCallback(async (rating: Rating) => {
-    if (!currentCard) return;
-    await rateCardFSRS(currentCard.id, deck.id, userId, rating);
-    handleNext();
-  }, [currentCard, deck.id, handleNext, userId]);
+  const handleNext = useCallback(() => {
+    if (currentIndex < queue.length - 1) {
+      setCurrentIndex((i) => i + 1);
+      setIsFlipped(false);
+      setShowHint(false);
+    } else {
+      setIsCompleted(true);
+      confetti({ particleCount: 90, spread: 75, origin: { y: 0.6 } });
+    }
+  }, [currentIndex, queue.length]);
+
+  const handlePrev = useCallback(() => {
+    if (currentIndex > 0) {
+      setCurrentIndex((i) => i - 1);
+      setIsFlipped(false);
+      setShowHint(false);
+    }
+  }, [currentIndex]);
+
+  // FSRS Rating Handler
+  const handleRateFSRS = useCallback(
+    async (rating: Rating) => {
+      if (!currentCard) return;
+      await rateCardFSRS(currentCard.id, deck.id, userId, rating);
+      handleNext();
+    },
+    [currentCard, deck.id, handleNext, userId]
+  );
+
+  // Cram Mode Rating Handler
+  const handleCramResult = useCallback(
+    async (knewIt: boolean) => {
+      if (!currentCard) return;
+
+      // Log review without skewing long-term FSRS weights
+      await rateCardFSRS(
+        currentCard.id,
+        deck.id,
+        userId,
+        knewIt ? Rating.Good : Rating.Again,
+        { cramMode: true }
+      );
+
+      if (!knewIt) {
+        // Return card to the end of the current session queue
+        setQueue((prev) => [...prev, currentCard]);
+      }
+
+      if (currentIndex < queue.length - 1) {
+        setCurrentIndex((i) => i + 1);
+        setIsFlipped(false);
+        setShowHint(false);
+      } else {
+        if (!knewIt) {
+          setCurrentIndex((i) => i + 1);
+          setIsFlipped(false);
+          setShowHint(false);
+        } else {
+          setIsCompleted(true);
+          confetti({ particleCount: 100, spread: 80, origin: { y: 0.6 } });
+        }
+      }
+    },
+    [currentCard, currentIndex, deck.id, queue.length, userId]
+  );
 
   const handleShuffle = () => {
-    const shuffled = [...cards].sort(() => Math.random() - 0.5);
-    setCards(shuffled);
+    const shuffled = [...queue].sort(() => Math.random() - 0.5);
+    setQueue(shuffled);
     setCurrentIndex(0);
     setIsFlipped(false);
   };
@@ -103,8 +191,11 @@ export function FlashcardsMode({
     e.stopPropagation();
     if (!currentCard) return;
 
-    const frontText = stripClozeSyntax(currentCard.term || currentCard.front || "");
-    const backText = currentCard.definition || currentCard.back || "";
+    const frontRaw = currentCard.term || currentCard.front || "";
+    const backRaw = currentCard.definition || currentCard.back || "";
+
+    const frontText = stripClozeSyntax(frontRaw);
+    const backText = backRaw;
 
     if (isReversed) {
       if (isFlipped) {
@@ -124,38 +215,81 @@ export function FlashcardsMode({
   // Keyboard navigation shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement
+      ) {
         return;
       }
+
       if (e.code === "Space") {
         e.preventDefault();
         handleFlip();
-      } else if (e.code === "ArrowRight") {
-        e.preventDefault();
-        handleNext();
-      } else if (e.code === "ArrowLeft") {
-        e.preventDefault();
-        handlePrev();
-      } else if (e.key === "1") {
-        handleRate(Rating.Again);
-      } else if (e.key === "2") {
-        handleRate(Rating.Hard);
-      } else if (e.key === "3") {
-        handleRate(Rating.Good);
-      } else if (e.key === "4") {
-        handleRate(Rating.Easy);
+      } else if (mode === "fsrs") {
+        if (e.key === "1") handleRateFSRS(Rating.Again);
+        else if (e.key === "2") handleRateFSRS(Rating.Hard);
+        else if (e.key === "3") handleRateFSRS(Rating.Good);
+        else if (e.key === "4") handleRateFSRS(Rating.Easy);
+        else if (e.code === "ArrowLeft") {
+          e.preventDefault();
+          handlePrev();
+        } else if (e.code === "ArrowRight") {
+          e.preventDefault();
+          handleNext();
+        }
+      } else if (mode === "cram") {
+        if (e.code === "ArrowLeft") {
+          e.preventDefault();
+          handleCramResult(false);
+        } else if (e.code === "ArrowRight") {
+          e.preventDefault();
+          handleCramResult(true);
+        }
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [handleFlip, handleNext, handlePrev, handleRate]);
+  }, [handleFlip, handleNext, handlePrev, handleRateFSRS, handleCramResult, mode]);
 
-  if (cards.length === 0) {
+  // Touch Swipe Handler (drag gesture)
+  const handleDragEnd = (
+    _event: MouseEvent | TouchEvent | PointerEvent,
+    info: PanInfo
+  ) => {
+    const threshold = 100;
+    if (info.offset.x > threshold) {
+      // Swiped Right -> Known / Easy
+      if (mode === "cram") {
+        handleCramResult(true);
+      } else {
+        handleRateFSRS(Rating.Good);
+      }
+    } else if (info.offset.x < -threshold) {
+      // Swiped Left -> Unknown / Again
+      if (mode === "cram") {
+        handleCramResult(false);
+      } else {
+        handleRateFSRS(Rating.Again);
+      }
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="max-w-xl mx-auto py-16 text-center text-zinc-500">
+        Загрузка карточек...
+      </div>
+    );
+  }
+
+  if (initialCards.length === 0) {
     return (
       <div className="max-w-xl mx-auto py-16 text-center space-y-4">
         <h3 className="text-lg font-bold text-zinc-900 dark:text-white">Колода пуста</h3>
-        <p className="text-sm text-zinc-500">Пожалуйста, добавьте карточки в эту колоду перед началом повторения.</p>
+        <p className="text-sm text-zinc-500">
+          Пожалуйста, добавьте карточки в эту колоду перед началом повторения.
+        </p>
         <button
           onClick={onExit}
           className="px-4 py-2 text-sm rounded-lg bg-indigo-600 text-white font-medium"
@@ -166,51 +300,115 @@ export function FlashcardsMode({
     );
   }
 
-  if (isCompleted) {
+  if (queue.length === 0 && mode === "fsrs") {
     return (
-      <div className="max-w-lg mx-auto py-12 px-4 text-center space-y-6">
+      <div className="max-w-md mx-auto py-16 text-center space-y-6">
         <div className="w-16 h-16 rounded-full bg-emerald-100 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mx-auto shadow-lg">
           <CheckCircle className="w-8 h-8" />
+        </div>
+        <div className="space-y-2">
+          <h2 className="text-2xl font-bold text-zinc-900 dark:text-white">
+            Все карточки повторены!
+          </h2>
+          <p className="text-sm text-zinc-500 dark:text-zinc-400">
+            На сегодня нет карточек, требующих интервального повторения. Алгоритм FSRS
+            рассчитал расписание для максимального сохранения в памяти.
+          </p>
+        </div>
+        <div className="flex flex-col sm:flex-row justify-center gap-3 pt-2">
+          <Button variant="outline" onClick={() => setMode("cram")}>
+            <Zap className="w-4 h-4 mr-1.5 text-amber-500" />
+            Включить Cram Mode (Зубрежка)
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={() => {
+              setQueue([...initialCards]);
+              setCurrentIndex(0);
+            }}
+          >
+            <RotateCw className="w-4 h-4 mr-1.5" />
+            Повторить всю колоду
+          </Button>
+          <Button onClick={onExit}>Назад к колоде</Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (isCompleted) {
+    return (
+      <div className="max-w-lg mx-auto py-12 px-4 text-center space-y-6 animate-in zoom-in-95 duration-200">
+        <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center text-white mx-auto shadow-xl shadow-indigo-500/20">
+          <Sparkles className="w-8 h-8" />
         </div>
         <div className="space-y-2">
           <h2 className="text-2xl font-extrabold text-zinc-900 dark:text-white">
             Сессия повторения завершена!
           </h2>
           <p className="text-sm text-zinc-500 dark:text-zinc-400">
-            Вы повторили все карточки ({cards.length}). Ваш прогресс сохранен алгоритмом интервального повторения FSRS.
+            {mode === "fsrs"
+              ? `Вы повторили все запланированные карточки (${queue.length}). Ваш прогресс сохранен алгоритмом FSRS.`
+              : `Вы успешно прогнали все карточки колоды по кругу в режиме зубрежки (${queue.length} повторений)!`}
           </p>
         </div>
         <div className="flex justify-center space-x-3 pt-2">
-          <button
+          <Button
+            variant="outline"
             onClick={() => {
-              setIsCompleted(false);
-              setCurrentIndex(0);
-              setIsFlipped(false);
+              loadQueue(mode);
             }}
-            className="flex items-center space-x-2 px-4 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-sm font-semibold transition"
+            className="gap-2"
           >
             <RotateCw className="w-4 h-4" />
             <span>Повторить снова</span>
-          </button>
-          <button
-            onClick={onExit}
-            className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold shadow-sm transition"
-          >
+          </Button>
+          <Button onClick={onExit} className="bg-indigo-600 hover:bg-indigo-500 text-white">
             Назад к колоде
-          </button>
+          </Button>
         </div>
       </div>
     );
   }
 
+  if (!currentCard) return null;
+
+  const rawFront = isReversed
+    ? currentCard.definition || currentCard.back || ""
+    : currentCard.term || currentCard.front || "";
+  const rawBack = isReversed
+    ? currentCard.term || currentCard.front || ""
+    : currentCard.definition || currentCard.back || "";
+
+  const isClozeCard = !isReversed && hasCloze(rawFront);
+  const displayFront = isClozeCard ? renderClozeQuestion(rawFront) : rawFront;
+  const displayBack = isClozeCard
+    ? renderClozeAnswer(rawFront) +
+      (rawBack && rawBack !== rawFront ? `\n\n---\n\n${rawBack}` : "")
+    : rawBack;
+
+  const frontLabel = isReversed
+    ? "Определение (Лицевая сторона)"
+    : isClozeCard
+    ? "Текст с пропуском (Cloze)"
+    : "Лицевая сторона";
+
+  const backLabel = isReversed
+    ? "Термин (Обратная сторона)"
+    : isClozeCard
+    ? "Ответ (Cloze)"
+    : "Обратная сторона";
+
   return (
     <div
       className={`flex flex-col h-full max-w-4xl mx-auto px-4 py-4 ${
-        isFullscreen ? "fixed inset-0 z-50 bg-white dark:bg-zinc-950 p-6 max-w-none" : ""
+        isFullscreen
+          ? "fixed inset-0 z-50 bg-white dark:bg-zinc-950 p-6 max-w-none"
+          : ""
       }`}
     >
       {/* Top Bar */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-4 gap-2 flex-wrap">
         <button
           onClick={onExit}
           className="flex items-center space-x-1.5 text-xs font-medium text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition"
@@ -219,12 +417,33 @@ export function FlashcardsMode({
           <span>Назад к колоде</span>
         </button>
 
-        <div className="flex items-center space-x-2 text-xs font-semibold text-zinc-600 dark:text-zinc-400">
-          <span>{currentIndex + 1}</span>
-          <span>/</span>
-          <span>{cards.length}</span>
+        {/* Mode Switcher: FSRS vs Cram */}
+        <div className="flex items-center p-1 rounded-xl bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800">
+          <button
+            onClick={() => setMode("fsrs")}
+            className={`flex items-center space-x-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition ${
+              mode === "fsrs"
+                ? "bg-white dark:bg-zinc-800 text-indigo-600 dark:text-indigo-400 shadow-sm"
+                : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-300"
+            }`}
+          >
+            <Clock className="w-3.5 h-3.5" />
+            <span>FSRS (Интервалы)</span>
+          </button>
+          <button
+            onClick={() => setMode("cram")}
+            className={`flex items-center space-x-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition ${
+              mode === "cram"
+                ? "bg-white dark:bg-zinc-800 text-amber-600 dark:text-amber-400 shadow-sm"
+                : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-300"
+            }`}
+          >
+            <Zap className="w-3.5 h-3.5" />
+            <span>Зубрежка (Cram)</span>
+          </button>
         </div>
 
+        {/* Controls */}
         <div className="flex items-center space-x-2">
           <button
             onClick={() => {
@@ -261,18 +480,35 @@ export function FlashcardsMode({
         </div>
       </div>
 
-      {/* Progress Bar */}
-      <div className="w-full bg-zinc-200 dark:bg-zinc-800 h-1.5 rounded-full overflow-hidden mb-6">
-        <div
-          className="bg-indigo-600 h-full transition-all duration-300 rounded-full"
-          style={{ width: `${((currentIndex + 1) / cards.length) * 100}%` }}
-        />
+      {/* Progress & Badge */}
+      <div className="space-y-2 mb-6">
+        <div className="flex items-center justify-between text-xs font-semibold text-zinc-500">
+          <span className="flex items-center space-x-1.5">
+            <Badge variant={mode === "fsrs" ? "default" : "warning"} className="text-[10px]">
+              {mode === "fsrs" ? "FSRS Spaced" : "Cram Loop"}
+            </Badge>
+            <span>{deck.title}</span>
+          </span>
+          <span className="font-mono">
+            {currentIndex + 1} / {queue.length}
+          </span>
+        </div>
+        <div className="w-full bg-zinc-200 dark:bg-zinc-800 h-1.5 rounded-full overflow-hidden">
+          <div
+            className="bg-indigo-600 h-full transition-all duration-300 rounded-full"
+            style={{ width: `${((currentIndex + 1) / queue.length) * 100}%` }}
+          />
+        </div>
       </div>
 
-      {/* 3D Flip Card Container */}
+      {/* 3D Flip Card Container with Mobile Swipe Support */}
       <div className="flex-1 flex flex-col items-center justify-center min-h-[380px] sm:min-h-[460px] perspective-1000 w-full select-none cursor-pointer">
         <motion.div
           onClick={handleFlip}
+          drag="x"
+          dragConstraints={{ left: 0, right: 0 }}
+          dragElastic={0.4}
+          onDragEnd={handleDragEnd}
           className="relative w-full h-full max-w-3xl transform-style-3d shadow-xl rounded-3xl"
           animate={{ rotateY: isFlipped ? 180 : 0 }}
           transition={{ duration: 0.45, ease: "easeInOut" }}
@@ -281,7 +517,7 @@ export function FlashcardsMode({
           <div className="absolute inset-0 backface-hidden w-full h-full p-8 sm:p-12 rounded-3xl bg-white dark:bg-zinc-900 border-2 border-zinc-200/80 dark:border-zinc-800 flex flex-col justify-between overflow-y-auto">
             <div className="flex items-center justify-between text-xs text-zinc-400">
               <span className="uppercase tracking-widest font-semibold text-indigo-500">
-                {isReversed ? "Определение (Лицевая)" : "Лицевая сторона"}
+                {frontLabel}
               </span>
               <div className="flex items-center space-x-2">
                 {currentCard.hint && (
@@ -308,15 +544,7 @@ export function FlashcardsMode({
 
             <div className="my-auto py-4 text-center">
               <div className="text-xl sm:text-2xl font-medium text-zinc-900 dark:text-white leading-relaxed">
-                {isReversed ? (
-                  <MarkdownMath content={currentCard.definition || currentCard.back || ""} />
-                ) : hasCloze(currentCard.term || currentCard.front || "") ? (
-                  <MarkdownMath
-                    content={renderClozeQuestion(currentCard.term || currentCard.front || "")}
-                  />
-                ) : (
-                  <MarkdownMath content={currentCard.term || currentCard.front || ""} />
-                )}
+                <MarkdownMath content={displayFront} />
               </div>
 
               {(isReversed
@@ -329,7 +557,7 @@ export function FlashcardsMode({
                       : currentCard.imageData || currentCard.frontImage
                   }
                   alt="Illustration"
-                  className="mt-6 max-h-56 mx-auto rounded-xl object-contain shadow-sm"
+                  className="mt-6 max-h-56 mx-auto rounded-xl object-contain shadow-sm border border-zinc-100 dark:border-zinc-800"
                 />
               )}
 
@@ -345,7 +573,11 @@ export function FlashcardsMode({
             </div>
 
             <div className="text-center text-xs text-zinc-400">
-              Нажмите мышью или <kbd className="px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-[10px] font-mono">Пробел</kbd>, чтобы перевернуть
+              Нажмите мышью или{" "}
+              <kbd className="px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-[10px] font-mono">
+                Пробел
+              </kbd>
+              , чтобы перевернуть
             </div>
           </div>
 
@@ -353,7 +585,7 @@ export function FlashcardsMode({
           <div className="absolute inset-0 backface-hidden rotate-y-180 w-full h-full p-8 sm:p-12 rounded-3xl bg-white dark:bg-zinc-900 border-2 border-indigo-500/40 dark:border-indigo-500/30 flex flex-col justify-between overflow-y-auto">
             <div className="flex items-center justify-between text-xs text-zinc-400">
               <span className="uppercase tracking-widest font-semibold text-emerald-500">
-                {isReversed ? "Термин (Обратная)" : "Обратная сторона"}
+                {backLabel}
               </span>
               <button
                 onClick={handleTTS}
@@ -366,22 +598,7 @@ export function FlashcardsMode({
 
             <div className="my-auto py-4 text-center">
               <div className="text-lg sm:text-xl text-zinc-800 dark:text-zinc-100 leading-relaxed">
-                {isReversed ? (
-                  <MarkdownMath content={currentCard.term || currentCard.front || ""} />
-                ) : hasCloze(currentCard.term || currentCard.front || "") ? (
-                  <div className="space-y-3">
-                    <MarkdownMath
-                      content={renderClozeAnswer(currentCard.term || currentCard.front || "")}
-                    />
-                    {currentCard.definition && (
-                      <div className="text-sm text-zinc-500 dark:text-zinc-400 pt-2 border-t border-zinc-100 dark:border-zinc-800">
-                        <MarkdownMath content={currentCard.definition} />
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <MarkdownMath content={currentCard.definition || currentCard.back || ""} />
-                )}
+                <MarkdownMath content={displayBack} />
               </div>
 
               {(isReversed
@@ -394,52 +611,78 @@ export function FlashcardsMode({
                       : currentCard.backImage
                   }
                   alt="Back illustration"
-                  className="mt-6 max-h-56 mx-auto rounded-xl object-contain shadow-sm"
+                  className="mt-6 max-h-56 mx-auto rounded-xl object-contain shadow-sm border border-zinc-100 dark:border-zinc-800"
                 />
               )}
             </div>
 
             <div className="text-center text-xs text-zinc-400">
-              Оцените, насколько легко вы вспомнили ответ, чтобы запланировать следующее повторение
+              {mode === "fsrs"
+                ? "Оцените, насколько легко вы вспомнили ответ для FSRS интервала"
+                : "Отметьте, вспомнили ли вы карточку"}
             </div>
           </div>
         </motion.div>
       </div>
 
-      {/* Bottom Controls: Navigation & FSRS Rating Buttons */}
+      {/* Bottom Controls */}
       <div className="mt-6 space-y-3">
-        {/* FSRS Rating Buttons */}
-        <div className="grid grid-cols-4 gap-2 sm:gap-3 max-w-2xl mx-auto">
-          {intervals.map((item) => {
-            const colors: Record<Rating, string> = {
-              [Rating.Manual]: "bg-zinc-50 border-zinc-200 text-zinc-600",
-              [Rating.Again]:
-                "bg-red-50 hover:bg-red-100 dark:bg-red-950/30 dark:hover:bg-red-950/50 border-red-200 dark:border-red-900/60 text-red-600 dark:text-red-400",
-              [Rating.Hard]:
-                "bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/30 dark:hover:bg-amber-950/50 border-amber-200 dark:border-amber-900/60 text-amber-600 dark:text-amber-400",
-              [Rating.Good]:
-                "bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/30 dark:hover:bg-blue-950/50 border-blue-200 dark:border-blue-900/60 text-blue-600 dark:text-blue-400",
-              [Rating.Easy]:
-                "bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/30 dark:hover:bg-emerald-950/50 border-emerald-200 dark:border-emerald-900/60 text-emerald-600 dark:text-emerald-400",
-            };
+        {mode === "fsrs" ? (
+          /* FSRS Rating Buttons */
+          <div className="grid grid-cols-4 gap-2 sm:gap-3 max-w-2xl mx-auto">
+            {intervals.map((item) => {
+              const colors: Record<Rating, string> = {
+                [Rating.Manual]: "bg-zinc-50 border-zinc-200 text-zinc-600",
+                [Rating.Again]:
+                  "bg-red-50 hover:bg-red-100 dark:bg-red-950/30 dark:hover:bg-red-950/50 border-red-200 dark:border-red-900/60 text-red-600 dark:text-red-400",
+                [Rating.Hard]:
+                  "bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/30 dark:hover:bg-amber-950/50 border-amber-200 dark:border-amber-900/60 text-amber-600 dark:text-amber-400",
+                [Rating.Good]:
+                  "bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/30 dark:hover:bg-blue-950/50 border-blue-200 dark:border-blue-900/60 text-blue-600 dark:text-blue-400",
+                [Rating.Easy]:
+                  "bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/30 dark:hover:bg-emerald-950/50 border-emerald-200 dark:border-emerald-900/60 text-emerald-600 dark:text-emerald-400",
+              };
 
-            return (
-              <button
-                key={item.rating}
-                onClick={() => handleRate(item.rating)}
-                className={`py-2 px-2 sm:px-3 rounded-xl border flex flex-col items-center justify-center transition active:scale-95 shadow-sm ${colors[item.rating]}`}
-              >
-                <span className="text-xs font-bold">{item.label}</span>
-                <span className="text-[11px] font-mono opacity-80 mt-0.5">
-                  {item.intervalText}
-                </span>
-                <span className="text-[9px] opacity-60 hidden sm:inline">
-                  [{item.rating}]
-                </span>
-              </button>
-            );
-          })}
-        </div>
+              return (
+                <button
+                  key={item.rating}
+                  onClick={() => handleRateFSRS(item.rating)}
+                  className={`py-2 px-2 sm:px-3 rounded-xl border flex flex-col items-center justify-center transition active:scale-95 shadow-sm ${colors[item.rating]}`}
+                >
+                  <span className="text-xs font-bold">{item.label}</span>
+                  <span className="text-[11px] font-mono opacity-80 mt-0.5">
+                    {item.intervalText}
+                  </span>
+                  <span className="text-[9px] opacity-60 hidden sm:inline">
+                    [{item.rating}]
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        ) : (
+          /* Cram Mode Quick Actions */
+          <div className="grid grid-cols-2 gap-4 max-w-lg mx-auto">
+            <Button
+              variant="outline"
+              size="lg"
+              onClick={() => handleCramResult(false)}
+              className="border-red-300 dark:border-red-900/60 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 font-semibold"
+            >
+              <ChevronLeft className="w-5 h-5 mr-1" />
+              <span>Не знаю (в конец очереди)</span>
+            </Button>
+
+            <Button
+              size="lg"
+              onClick={() => handleCramResult(true)}
+              className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold shadow-sm"
+            >
+              <span>Знаю (выучено)</span>
+              <ChevronRight className="w-5 h-5 ml-1" />
+            </Button>
+          </div>
+        )}
 
         {/* Previous / Flip / Next arrow buttons */}
         <div className="flex items-center justify-center space-x-6 pt-1">
@@ -467,6 +710,11 @@ export function FlashcardsMode({
           >
             <ChevronRight className="w-5 h-5 text-zinc-700 dark:text-zinc-300" />
           </button>
+        </div>
+
+        {/* Mobile swipe hint */}
+        <div className="text-center text-[11px] text-zinc-400 sm:hidden">
+          Свайп влево: Не знаю • Свайп вправо: Знаю
         </div>
       </div>
     </div>
