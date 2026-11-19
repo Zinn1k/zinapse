@@ -1,6 +1,6 @@
 # Zinapse — Free Quizlet Analog (Local-First PWA)
 
-Современный, бесплатный и полностью автономный Local-First аналог Quizlet для эффективного запоминания информации на базе научно обоснованного алгоритма интервальных повторений **FSRS** (*Free Spaced Repetition Scheduler*), искусственного интеллекта **Google Gemini 2.5 Flash** и облачной синхронизации **Firebase** (бесплатный тариф Spark Plan).
+Современный, бесплатный и полностью автономный Local-First аналог Quizlet для эффективного запоминания информации на базе научно обоснованного алгоритма интервальных повторений **FSRS** (*Free Spaced Repetition Scheduler*), искусственного интеллекта **Google Gemini 3.5 Flash-Lite** и облачной синхронизации **Firebase** (бесплатный тариф Spark Plan).
 
 ---
 
@@ -45,7 +45,7 @@
 - **Стилизация:** Tailwind CSS v4, Lucide React, Framer Motion
 - **Локальная БД:** Dexie.js (IndexedDB) + `dexie-react-hooks` (`useLiveQuery`)
 - **Алгоритм повторений:** `ts-fsrs`
-- **Искусственный интеллект:** `@google/genai` (Google Gemini 2.5 Flash)
+- **Искусственный интеллект:** `@google/genai` (Google Gemini 3.5 Flash-Lite / 3.8 Flash)
 - **Облако и Auth:** Firebase (Authentication + Cloud Firestore на бесплатном Spark Plan)
 - **Формулы:** `katex`, `remark-math`, `rehype-katex`
 

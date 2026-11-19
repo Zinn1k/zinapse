@@ -13,7 +13,7 @@
 * **Форм-факторы:** 
   1. Progressive Web App (PWA) для Web, iOS, macOS, Windows
   2. Нативное Android-приложение (сборка через Capacitor 8, APK формируется через GitHub Actions CI/CD)
-* **Назначение:** Современный, бесплатный, локально-ориентированный (Local-First) аналог Quizlet и Anki для эффективного запоминания информации на базе научно обоснованного алгоритма интервальных повторений **FSRS**, искусственного интеллекта **Google Gemini 2.5 Flash** и облачной синхронизации **Firebase** (100% бесплатный Spark Plan).
+* **Назначение:** Современный, бесплатный, локально-ориентированный (Local-First) аналог Quizlet и Anki для эффективного запоминания информации на базе научно обоснованного алгоритма интервальных повторений **FSRS**, искусственного интеллекта **Google Gemini 3.5 Flash-Lite** (с поддержкой **gemini-3.8-flash**) и облачной синхронизации **Firebase** (100% бесплатный Spark Plan).
 
 ---
 
@@ -24,7 +24,7 @@
    * Все операции чтения, создания карточек, редактирования и тренировок происходят синхронно/мгновенно локально.
    * Приложение работает на 100% офлайн (в метро, самолете, без связи).
 2. **Zero-Cost Infrastructure (100% Free Tier):**
-   * Работает полностью на бесплатных лимитах: Vercel (Hobby), Firebase (Spark Plan), Google Gemini 2.5 Flash (AI Studio free tier).
+   * Работает полностью на бесплатных лимитах: Vercel (Hobby), Firebase (Spark Plan), Google Gemini 3.5 Flash-Lite (AI Studio free tier).
    * **Никакого платного Firebase Storage:** Картинки карточек сжимаются на клиенте до формата WebP ($\le 40$ КБ) и сохраняются в виде Base64-строк непосредственно в документе карточки.
    * **Озвучка (TTS) без затрат:** Используется Web Speech API браузера/устройства, а не платные облачные API.
 3. **Научный алгоритм интервальных повторений (FSRS):**
@@ -51,10 +51,10 @@
 | **Локальная БД** | **Dexie.js** | `^4.4.7` | IndexedDB ORM |
 | **Реактивность БД** | **dexie-react-hooks** | `^4.4.0` | `useLiveQuery` для авто-обновления React компонентов |
 | **Облако & Auth** | **Firebase SDK** | `^13.3.0` | Firebase Auth + Cloud Firestore |
-| **Интервалы** | **ts-fsrs** | `^5.4.2` | Математика FSRS (Free Spaced Repetition Scheduler) |
-| **Искусственный интеллект** | **@google/genai** | `^3.3.0` | Официальный SDK Google Gemini (модель Gemini 2.5 Flash) |
+| **Интервалы** | **ts-fsrs** | `^5.4.2` | Математика FSRS v5 (стабильная версия; v6 требует Node.js 24+) |
+| **Искусственный интеллект** | **@google/genai** | `^3.4.0` | Официальный SDK Google Gemini (`gemini-3.5-flash-lite`, fallback `gemini-3.8-flash`) |
 | **Математика / Наука** | **KaTeX, remark-math, rehype-katex** | `^0.19.1` / `^6.0.0` / `^7.0.1` | Рендеринг LaTeX-формул `$E=mc^2$` и `$$\int...$$` |
-| **Мобильная оболочка** | **Capacitor** | `^8.6.2` | `@capacitor/core`, `@capacitor/android`, `@capacitor/cli` |
+| **Мобильная оболочка** | **Capacitor** | `^8.6.2` | `@capacitor/core`, `@capacitor/android`, `@capacitor/cli` (Node 22+) |
 | **Эффекты** | **canvas-confetti** | `^1.9.4` | Салют победы при завершении учебной сессии |
 | **Тестирование** | **Vitest** | `^5.1.1` | Юнит-тестирование логики (`npm test`, 38 тестов) |
 
@@ -150,17 +150,17 @@
 
 ## 6. AI-генерация колод (`/create-ai` и `/api/generate-deck`)
 
-* **Движок:** `@google/genai` (Google Gemini 2.5 Flash).
+* **Движок:** `@google/genai` (Google Gemini 3.5 Flash-Lite с автоматическим fallback на `gemini-3.8-flash`).
 * **Маршруты:**
   * Фронтенд: `src/app/create-ai/page.tsx` + модалка `src/components/AIGenerateModal.tsx`.
   * Бэкенд: `src/app/api/generate-deck/route.ts`.
 * **Функционал:**
   * Генерация из произвольного текста, темы, конспекта или лекции.
-  * Drag-and-drop загрузка файлов конспектов `.txt` и `.md`.
+  * Drag-and-drop загрузка файлов конспектов `.txt` и `.md`, а также фото/сканов (Multimodal OCR).
   * Выбор уровня сложности (Школа, Университет, Профессиональный) и количества карточек.
-  * Поддержка двух режимов ключа API:
+  * Поддержка двух режимов ключа API и выбора модели:
     1. Серверный `GEMINI_API_KEY` из окружения приложения.
-    2. Пользовательский собственный ключ из настроек (`SettingsModal.tsx`).
+    2. Пользовательский собственный ключ и модель из настроек (`SettingsModal.tsx`).
   * Строгий JSON-вывод со структурой `{ title, description, cards: [{ term, definition, hint }] }` с автоматическим форматированием формул в LaTeX KaTeX.
 
 ---
@@ -334,7 +334,7 @@ npx cap open android
 * 100% Local-first архитектура на Dexie.js (IndexedDB).
 * 4 режима обучения: Карточки, Заучивание, Подбор, Тест.
 * Алгоритм интервальных повторений FSRS v5 + Cram Mode.
-* Генерация колод через Google Gemini 2.5 Flash с загрузкой файлов конспектов.
+* Генерация колод через Google Gemini 3.5 Flash-Lite / 3.8 Flash с загрузкой файлов конспектов и фото (OCR).
 * Облачная синхронизация Firestore + Firebase Authentication (Google 1-click + Email).
 * Мультиплеерный лидерборд в реальном времени для режима «Подбор».
 * Сжатие изображений в WebP $\le 40$ КБ.

@@ -80,6 +80,7 @@ export interface UserSettings {
   id: string; // "current"
   userId: string;
   geminiApiKey?: string;
+  geminiModel?: string; // e.g. "gemini-3.5-flash-lite"
   requestRetention: number; // default 0.9
   theme: "system" | "light" | "dark";
   voiceSpeed: number;

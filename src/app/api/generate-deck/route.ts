@@ -12,6 +12,7 @@ export async function POST(req: Request) {
       style = "term-definition", // "term-definition" | "exam-qa" | "concept-summary" | "cloze"
       language = "auto", // "auto" | "ru" | "en"
       userApiKey,
+      model,
     } = body;
 
     // Prioritize server env GEMINI_API_KEY, fallback to user-provided key, then NEXT_PUBLIC_
@@ -135,92 +136,116 @@ Create a flashcard deck with exactly ${count} cards according to the specificati
       ? [imagePart, `${systemInstruction}\n\n${userPrompt}`]
       : `${systemInstruction}\n\n${userPrompt}`;
 
+    const primaryModel =
+      model || process.env.GEMINI_MODEL || "gemini-3.5-flash-lite";
+
+    // Fallback candidates in priority order
+    const fallbackCandidates =
+      primaryModel === "gemini-3.5-flash-lite"
+        ? ["gemini-3.8-flash", "gemini-2.5-flash"]
+        : ["gemini-3.5-flash-lite", "gemini-3.8-flash"];
+
+    const responseSchema = {
+      type: Type.OBJECT,
+      properties: {
+        title: {
+          type: Type.STRING,
+          description: "Concise title for the deck",
+        },
+        description: {
+          type: Type.STRING,
+          description: "1-sentence summary of the deck content",
+        },
+        cards: {
+          type: Type.ARRAY,
+          description: "List of flashcards",
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              term: {
+                type: Type.STRING,
+                description: "Front of the card (question, term, or concept)",
+              },
+              definition: {
+                type: Type.STRING,
+                description: "Back of the card (answer or definition)",
+              },
+              hint: {
+                type: Type.STRING,
+                description: "Helpful mnemonic or memory cue",
+              },
+            },
+            required: ["term", "definition"],
+          },
+        },
+      },
+      required: ["title", "cards"],
+    };
+
     let response;
+    let activeModel = primaryModel;
+
     try {
       response = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
+        model: primaryModel,
         contents: requestContents,
         config: {
           responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              title: {
-                type: Type.STRING,
-                description: "Concise title for the deck",
-              },
-              description: {
-                type: Type.STRING,
-                description: "1-sentence summary of the deck content",
-              },
-              cards: {
-                type: Type.ARRAY,
-                description: "List of flashcards",
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    term: {
-                      type: Type.STRING,
-                      description: "Front of the card (question, term, or concept)",
-                    },
-                    definition: {
-                      type: Type.STRING,
-                      description: "Back of the card (answer or definition)",
-                    },
-                    hint: {
-                      type: Type.STRING,
-                      description: "Helpful mnemonic or memory cue",
-                    },
-                  },
-                  required: ["term", "definition"],
-                },
-              },
-            },
-            required: ["title", "cards"],
-          },
+          responseSchema,
         },
       });
     } catch (apiErr: unknown) {
       const errMessage = apiErr instanceof Error ? apiErr.message : String(apiErr);
-      if (errMessage.includes("not found") || errMessage.includes("404")) {
-        response = await ai.models.generateContent({
-          model: "gemini-2.0-flash",
-          contents: requestContents,
-          config: {
-            responseMimeType: "application/json",
-            responseSchema: {
-              type: Type.OBJECT,
-              properties: {
-                title: { type: Type.STRING },
-                description: { type: Type.STRING },
-                cards: {
-                  type: Type.ARRAY,
-                  items: {
-                    type: Type.OBJECT,
-                    properties: {
-                      term: { type: Type.STRING },
-                      definition: { type: Type.STRING },
-                      hint: { type: Type.STRING },
-                    },
-                    required: ["term", "definition"],
-                  },
-                },
+      const isModelIssue =
+        errMessage.includes("not found") ||
+        errMessage.includes("404") ||
+        errMessage.includes("deprecated") ||
+        errMessage.includes("unsupported") ||
+        errMessage.includes("PERMISSION_DENIED");
+
+      if (isModelIssue && fallbackCandidates.length > 0) {
+        let fallbackSucceeded = false;
+        let lastErr = apiErr;
+
+        for (const candidate of fallbackCandidates) {
+          try {
+            console.warn(
+              `Primary model '${activeModel}' encountered issue (${errMessage}). Falling back to '${candidate}'...`
+            );
+            response = await ai.models.generateContent({
+              model: candidate,
+              contents: requestContents,
+              config: {
+                responseMimeType: "application/json",
+                responseSchema,
               },
-              required: ["title", "cards"],
-            },
-          },
-        });
+            });
+            activeModel = candidate;
+            fallbackSucceeded = true;
+            break;
+          } catch (fbErr) {
+            lastErr = fbErr;
+          }
+        }
+
+        if (!fallbackSucceeded) {
+          throw lastErr;
+        }
       } else {
         throw apiErr;
       }
     }
 
-    const outputText = response.text;
-    if (!outputText) {
+    if (!response || !response.text) {
       return NextResponse.json(
         { error: "Получен пустой ответ от Gemini API.", code: "EMPTY_RESPONSE" },
         { status: 500 }
       );
+    }
+
+    let outputText = response.text.trim();
+    if (outputText.startsWith("```")) {
+      outputText = outputText.replace(/^```(?:json)?\s*\n?/, "").replace(/\n?```\s*$/, "").trim();
     }
 
     const result = JSON.parse(outputText);

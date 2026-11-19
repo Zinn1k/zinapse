@@ -31,6 +31,7 @@ interface SettingsModalProps {
 
 export function SettingsModal({ isOpen, onClose, userId }: SettingsModalProps) {
   const [apiKey, setApiKey] = useState("");
+  const [geminiModel, setGeminiModel] = useState("gemini-3.5-flash-lite");
   const [retention, setRetention] = useState(0.9);
   const [voiceName, setVoiceName] = useState("");
   const [voiceSpeed, setVoiceSpeed] = useState(1.0);
@@ -50,6 +51,7 @@ export function SettingsModal({ isOpen, onClose, userId }: SettingsModalProps) {
     db.settings.get("current").then((setting) => {
       if (setting) {
         setApiKey(setting.geminiApiKey || "");
+        setGeminiModel(setting.geminiModel || "gemini-3.5-flash-lite");
         setRetention(setting.requestRetention ?? 0.9);
         setVoiceName(setting.voiceName || "");
         setVoiceSpeed(setting.voiceSpeed ?? 1.0);
@@ -73,6 +75,7 @@ export function SettingsModal({ isOpen, onClose, userId }: SettingsModalProps) {
       id: "current",
       userId,
       geminiApiKey: apiKey.trim(),
+      geminiModel: geminiModel || "gemini-3.5-flash-lite",
       requestRetention: retention,
       theme: "dark",
       voiceName,
@@ -225,6 +228,21 @@ export function SettingsModal({ isOpen, onClose, userId }: SettingsModalProps) {
             <p className="text-xs text-zinc-500 dark:text-zinc-400">
               Используется для генерации карточек с помощью AI SDK. Надёжно хранится локально в IndexedDB вашего браузера.
             </p>
+
+            <div className="pt-1">
+              <span className="text-xs text-zinc-500 dark:text-zinc-400 block mb-1">
+                Модель генерации Gemini
+              </span>
+              <select
+                value={geminiModel}
+                onChange={(e) => setGeminiModel(e.target.value)}
+                className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              >
+                <option value="gemini-3.5-flash-lite">gemini-3.5-flash-lite (Рекомендуется • 1M Context, быстрый)</option>
+                <option value="gemini-3.8-flash">gemini-3.8-flash (Высокая детализация и точность)</option>
+                <option value="gemini-2.5-flash">gemini-2.5-flash (Устаревшая • дедлайн 1 декабря 2026)</option>
+              </select>
+            </div>
           </div>
 
           <hr className="border-zinc-200 dark:border-zinc-800" />

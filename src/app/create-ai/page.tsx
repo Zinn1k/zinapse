@@ -75,12 +75,18 @@ export default function CreateWithAIPage() {
   const [previewCards, setPreviewCards] = useState<PreviewCard[]>([]);
   const [isRenderMode, setIsRenderMode] = useState<Record<string, boolean>>({});
 
-  // Load saved API key from localStorage
+  // Load saved API key from localStorage or Dexie settings
   useEffect(() => {
     try {
       const savedKey = localStorage.getItem("gemini_user_api_key");
       if (savedKey) {
         setUserApiKey(savedKey);
+      } else {
+        db.settings.get("current").then((s) => {
+          if (s?.geminiApiKey) {
+            setUserApiKey(s.geminiApiKey);
+          }
+        });
       }
     } catch {
       // ignore
@@ -361,7 +367,7 @@ Burn the midnight oil — to work or study late into the night. Example: She bur
               </h1>
             </div>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Google Gemini 2.5 Flash
+              Google Gemini 3.5 Flash-Lite
             </p>
           </div>
         </div>

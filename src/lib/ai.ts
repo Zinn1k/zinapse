@@ -1,3 +1,5 @@
+import { db } from "./db";
+
 export interface GeneratedCard {
   term: string;
   definition: string;
@@ -9,6 +11,7 @@ export interface GeneratedCard {
 export interface GenerateDeckOptions {
   userApiKey?: string;
   apiKey?: string;
+  model?: string;
   prompt: string;
   text?: string;
   image?: string; // base64 data URL
@@ -38,7 +41,25 @@ export async function generateDeckWithAI(
   options: GenerateDeckOptions
 ): Promise<GenerateDeckResult> {
   const text = options.text || options.prompt;
-  const userApiKey = options.userApiKey || options.apiKey;
+  let userApiKey = options.userApiKey || options.apiKey;
+  let model = options.model;
+
+  // If in browser and missing userApiKey or model, fetch from saved settings
+  if (typeof window !== "undefined" && (!userApiKey || !model)) {
+    try {
+      const setting = await db.settings.get("current");
+      if (setting) {
+        if (!userApiKey && setting.geminiApiKey) {
+          userApiKey = setting.geminiApiKey;
+        }
+        if (!model && setting.geminiModel) {
+          model = setting.geminiModel;
+        }
+      }
+    } catch {
+      // ignore Dexie lookup errors
+    }
+  }
 
   const res = await fetch("/api/generate-deck", {
     method: "POST",
@@ -51,6 +72,7 @@ export async function generateDeckWithAI(
       style: options.style || "term-definition",
       language: options.language || "auto",
       userApiKey,
+      model: model || "gemini-3.5-flash-lite",
     }),
   });
 
