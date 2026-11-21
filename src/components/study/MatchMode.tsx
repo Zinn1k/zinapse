@@ -401,13 +401,13 @@ export function MatchMode({ deck, cards: allCards, userId, onExit }: MatchModePr
   }
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-4 flex flex-col min-h-[600px] justify-between space-y-6">
+    <div className="app-shell mx-auto flex min-h-[600px] w-full max-w-4xl flex-col justify-between space-y-6 px-4 py-4">
       {/* Top Header */}
-      <div className="flex items-center justify-between border-b pb-4 border-zinc-200 dark:border-zinc-800">
+      <div className="flex items-center justify-between border-b pb-4 border-line">
         <div className="flex items-center space-x-3">
           <button
             onClick={onExit}
-            className="flex items-center space-x-1.5 text-xs font-semibold text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition"
+            className="flex items-center space-x-1.5 text-xs font-semibold text-ink-muted hover:text-ink transition"
           >
             <ArrowLeft className="w-4 h-4" />
             <span>Назад</span>
@@ -415,11 +415,11 @@ export function MatchMode({ deck, cards: allCards, userId, onExit }: MatchModePr
           <div>
             <div className="flex items-center gap-2">
               <Zap className="w-4 h-4 text-amber-500" />
-              <h1 className="font-bold text-sm sm:text-base leading-none text-zinc-900 dark:text-white">
+              <h1 className="font-bold text-sm sm:text-base leading-none text-ink">
                 Подбор
               </h1>
             </div>
-            <p className="text-xs text-zinc-500 truncate max-w-[200px] mt-0.5">
+            <p className="text-xs text-ink-muted truncate max-w-[200px] mt-0.5">
               {deck.title}
             </p>
           </div>
@@ -592,7 +592,13 @@ export function MatchMode({ deck, cards: allCards, userId, onExit }: MatchModePr
         </div>
       ) : (
         /* 12-Tile Game Grid */
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-4 my-auto select-none">
+        <div
+          className={`my-auto grid select-none gap-3 sm:gap-4 ${
+            tiles.length <= 6
+              ? "mx-auto w-full max-w-md grid-cols-2 sm:grid-cols-3"
+              : "grid-cols-2 sm:grid-cols-3 md:grid-cols-4"
+          }`}
+        >
           <AnimatePresence>
             {tiles.map((tile) => {
               const isSelected = selectedTileId === tile.id;

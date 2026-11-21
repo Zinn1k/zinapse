@@ -1,6 +1,6 @@
 {
   "name": "zinapse",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -49,6 +49,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "^15.5.29",
+    "fake-indexeddb": "^6.2.8",
     "tailwindcss": "4.3.3",
     "typescript": "^5",
     "vite": "^8.3.8",

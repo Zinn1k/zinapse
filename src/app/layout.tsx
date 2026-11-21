@@ -1,23 +1,32 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Inter, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { ThemeProvider } from "@/components/ThemeProvider";
 import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
 import { AppUpdateNotification } from "@/components/AppUpdateNotification";
+import { getThemeInitScript } from "@/lib/theme";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
+// Inter has a full Cyrillic set, which Geist lacks — the Russian UI would
+// otherwise fall back to the OS font mid-sentence.
+const inter = Inter({
+  variable: "--font-inter",
+  subsets: ["latin", "cyrillic"],
+  display: "swap",
 });
 
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
+  display: "swap",
 });
 
 export const metadata: Metadata = {
-  title: "Zinapse - Бесплатный аналог Quizlet и FSRS карточки",
+  title: {
+    default: "Zinapse — бесплатный аналог Quizlet с FSRS и AI",
+    template: "%s · Zinapse",
+  },
   description:
-    "Local-first приложение для карточек с современным алгоритмом интервального повторения FSRS, формулами KaTeX и AI-генерацией на базе Gemini.",
+    "Local-first карточки с алгоритмом интервального повторения FSRS, формулами KaTeX и генерацией колод через Gemini. Работает офлайн, данные хранятся на устройстве.",
   applicationName: "Zinapse",
   appleWebApp: {
     capable: true,
@@ -28,13 +37,14 @@ export const metadata: Metadata = {
     icon: "/icons/icon.svg",
     apple: "/icons/icon.svg",
   },
+  formatDetection: { telephone: false },
 };
 
 export const viewport: Viewport = {
-  themeColor: "#4f46e5",
+  themeColor: "#08080c",
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({
@@ -45,12 +55,24 @@ export default function RootLayout({
   return (
     <html
       lang="ru"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased dark`}
+      suppressHydrationWarning
+      className={`${inter.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col bg-white dark:bg-black text-zinc-900 dark:text-zinc-100">
-        <ServiceWorkerRegister />
-        <AppUpdateNotification />
-        {children}
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: getThemeInitScript() }} />
+      </head>
+      <body className="min-h-full flex flex-col bg-background text-ink">
+        <ThemeProvider>
+          <a
+            href="#main-content"
+            className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-xl focus:bg-brand focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-white focus:shadow-lg"
+          >
+            Перейти к содержимому
+          </a>
+          <ServiceWorkerRegister />
+          <AppUpdateNotification />
+          {children}
+        </ThemeProvider>
       </body>
     </html>
   );

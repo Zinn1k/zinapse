@@ -1,61 +1,180 @@
 @import "tailwindcss";
 @import "katex/dist/katex.min.css";
 
+/* ------------------------------------------------------------------ *
+ * Dark mode is class-based. Without this rule Tailwind v4 follows the
+ * OS media query while the app toggles `.dark`, producing mixed themes.
+ * ------------------------------------------------------------------ */
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
-  --background: #ffffff;
-  --foreground: #09090b;
-  --card: #ffffff;
-  --card-foreground: #09090b;
-  --primary: #4f46e5;
-  --primary-foreground: #ffffff;
-  --muted: #f4f4f5;
-  --muted-foreground: #71717a;
-  --border: #e4e4e7;
-  --ring: #4f46e5;
+  color-scheme: light;
+
+  --bg: #fafafc;
+  --bg-elevated: #ffffff;
+  --surface: #ffffff;
+  --surface-2: #f4f4f7;
+  --line: #e5e5ec;
+  --line-strong: #d4d4dd;
+  --ink: #0b0b12;
+  --ink-muted: #66667a;
+  --ink-subtle: #8b8b9c;
+  --brand: #4f46e5;
+  --brand-strong: #4338ca;
+  --brand-soft: #eef0ff;
+  --accent: #9333ea;
+  --success: #059669;
+  --warn: #d97706;
+  --danger: #dc2626;
+  --ring: #6366f1;
+  --glow-a: rgba(99, 102, 241, 0.18);
+  --glow-b: rgba(168, 85, 247, 0.14);
 }
 
 .dark {
-  --background: #09090b;
-  --foreground: #fafafa;
-  --card: #18181b;
-  --card-foreground: #fafafa;
-  --primary: #6366f1;
-  --primary-foreground: #ffffff;
-  --muted: #27272a;
-  --muted-foreground: #a1a1aa;
-  --border: #27272a;
-  --ring: #6366f1;
+  color-scheme: dark;
+
+  --bg: #08080c;
+  --bg-elevated: #0d0d14;
+  --surface: #101018;
+  --surface-2: #171722;
+  --line: #24242f;
+  --line-strong: #33333f;
+  --ink: #f7f7fb;
+  --ink-muted: #a0a0b4;
+  --ink-subtle: #73738a;
+  --brand: #6366f1;
+  --brand-strong: #818cf8;
+  --brand-soft: #1a1a33;
+  --accent: #c084fc;
+  --success: #34d399;
+  --warn: #fbbf24;
+  --danger: #f87171;
+  --ring: #818cf8;
+  --glow-a: rgba(99, 102, 241, 0.22);
+  --glow-b: rgba(168, 85, 247, 0.18);
 }
 
-body {
-  background-color: var(--background);
-  color: var(--foreground);
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-  min-height: 100vh;
+@theme inline {
+  --color-background: var(--bg);
+  --color-foreground: var(--ink);
+  --color-elevated: var(--bg-elevated);
+  --color-surface: var(--surface);
+  --color-card: var(--surface);
+  --color-card-foreground: var(--ink);
+  --color-popover: var(--surface);
+  --color-popover-foreground: var(--ink);
+  --color-surface-2: var(--surface-2);
+  --color-muted: var(--surface-2);
+  --color-muted-foreground: var(--ink-muted);
+  --color-line: var(--line);
+  --color-border: var(--line);
+  --color-input: var(--line-strong);
+  --color-line-strong: var(--line-strong);
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+  --color-ink-subtle: var(--ink-subtle);
+  --color-brand: var(--brand);
+  --color-brand-strong: var(--brand-strong);
+  --color-brand-soft: var(--brand-soft);
+  --color-primary: var(--brand);
+  --color-primary-foreground: #ffffff;
+  --color-secondary: var(--surface-2);
+  --color-secondary-foreground: var(--ink);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--ink);
+  --color-destructive: var(--danger);
+  --color-destructive-foreground: #ffffff;
+  --color-success: var(--success);
+  --color-warn: var(--warn);
+  --color-danger: var(--danger);
+  --color-ring: var(--ring);
+
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo,
+    Consolas, monospace;
+
+  --shadow-soft: 0 1px 2px rgba(9, 9, 15, 0.05), 0 8px 24px -12px rgba(9, 9, 15, 0.12);
+  --shadow-lift: 0 2px 4px rgba(9, 9, 15, 0.06), 0 24px 48px -24px rgba(9, 9, 15, 0.28);
+  --shadow-glow: 0 18px 48px -18px rgba(99, 102, 241, 0.55);
+
+  --animate-fade-up: fade-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+  --animate-fade-in: fade-in 0.35s ease-out both;
+  --animate-pop: pop 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+  --animate-shimmer: shimmer 1.8s linear infinite;
+  --animate-float: float 9s ease-in-out infinite;
+  --animate-aurora: aurora 16s ease-in-out infinite alternate;
+  --animate-pulse-soft: pulse-soft 2.4s ease-in-out infinite;
 }
 
-/* 3D Card Flip Transforms */
-.perspective-1000 {
-  perspective: 1000px;
+@layer base {
+  * {
+    border-color: var(--line);
+  }
+
+  html {
+    -webkit-tap-highlight-color: transparent;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    min-height: 100vh;
+    background-color: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    font-feature-settings: "cv11", "ss01";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    background-color: color-mix(in oklab, var(--brand) 26%, transparent);
+    color: var(--ink);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    letter-spacing: -0.02em;
+    text-wrap: balance;
+  }
+
+  /* Formula rendering must follow the active theme. */
+  .katex,
+  .katex-display {
+    color: inherit;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
 }
 
-.transform-style-3d {
-  transform-style: preserve-3d;
-}
-
-.backface-hidden {
-  backface-visibility: hidden;
-  -webkit-backface-visibility: hidden;
-}
-
-.rotate-y-180 {
-  transform: rotateY(180deg);
-}
-
-/* Custom Scrollbars */
+/* ------------------------------------------------------------------ *
+ * Scrollbars
+ * ------------------------------------------------------------------ */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 10px;
+  height: 10px;
 }
 
 ::-webkit-scrollbar-track {
@@ -63,10 +182,294 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(160, 160, 160, 0.3);
+  background: color-mix(in oklab, var(--ink-subtle) 32%, transparent);
   border-radius: 9999px;
+  border: 3px solid transparent;
+  background-clip: content-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(160, 160, 160, 0.5);
+  background: color-mix(in oklab, var(--ink-subtle) 55%, transparent);
+  background-clip: content-box;
+}
+
+/* ------------------------------------------------------------------ *
+ * App shell — shared page background with brand aurora + fine grid.
+ * ------------------------------------------------------------------ */
+@utility app-shell {
+  position: relative;
+  isolation: isolate;
+  min-height: 100vh;
+  background-color: var(--bg);
+  color: var(--ink);
+}
+
+.app-shell::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  background-image:
+    radial-gradient(58rem 34rem at 8% -12%, var(--glow-a), transparent 62%),
+    radial-gradient(48rem 30rem at 100% 2%, var(--glow-b), transparent 58%);
+}
+
+.app-shell::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  opacity: 0.4;
+  background-image:
+    linear-gradient(to right, color-mix(in oklab, var(--line) 55%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in oklab, var(--line) 55%, transparent) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, #000 20%, transparent 78%);
+}
+
+/* ------------------------------------------------------------------ *
+ * Surfaces & effects
+ * ------------------------------------------------------------------ */
+@utility glass {
+  background-color: color-mix(in oklab, var(--bg-elevated) 76%, transparent);
+  backdrop-filter: blur(18px) saturate(150%);
+  -webkit-backdrop-filter: blur(18px) saturate(150%);
+}
+
+@utility panel {
+  background-color: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 1.5rem;
+  box-shadow: var(--shadow-soft);
+}
+
+@utility card-lift {
+  transition:
+    transform 0.28s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.28s cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 0.28s ease;
+}
+
+.card-lift:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-lift);
+}
+
+@utility text-gradient {
+  background-image: linear-gradient(115deg, var(--brand), var(--accent));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+@utility ring-glow {
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--brand) 40%, transparent),
+    0 18px 48px -20px color-mix(in oklab, var(--brand) 55%, transparent);
+}
+
+@utility no-scrollbar {
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+@utility shimmer-surface {
+  position: relative;
+  overflow: hidden;
+}
+
+.shimmer-surface::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background-image: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in oklab, var(--ink) 6%, transparent),
+    transparent
+  );
+  animation: shimmer 1.8s linear infinite;
+}
+
+/* ------------------------------------------------------------------ *
+ * Entrance animations.
+ * Emulates the `animate-in` family the codebase already uses, so existing
+ * markup animates again without a tailwindcss-animate dependency.
+ * ------------------------------------------------------------------ */
+@utility animate-in {
+  --enter-y: 10px;
+  --enter-scale: 1;
+  animation-name: enter;
+  animation-duration: 0.3s;
+  animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  animation-fill-mode: both;
+}
+
+@utility fade-in {
+  --enter-y: 0px;
+}
+
+@utility fade-in-0 {
+  --enter-y: 0px;
+}
+
+@utility zoom-in-95 {
+  --enter-y: 0px;
+  --enter-scale: 0.95;
+}
+
+@utility slide-in-from-bottom-5 {
+  --enter-y: 22px;
+}
+
+@keyframes enter {
+  from {
+    opacity: 0;
+    transform: translate3d(0, var(--enter-y, 10px), 0) scale(var(--enter-scale, 1));
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 14px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+  60% {
+    transform: scale(1.01);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes shimmer {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-14px) rotate(1.5deg);
+  }
+}
+
+@keyframes aurora {
+  0% {
+    transform: translate3d(-4%, -2%, 0) scale(1);
+  }
+  100% {
+    transform: translate3d(4%, 3%, 0) scale(1.08);
+  }
+}
+
+@keyframes pulse-soft {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+/* Radix dialogs (used by ui/dialog.tsx) */
+.dialog-overlay[data-state="open"] {
+  animation: overlay-in 0.2s ease-out;
+}
+
+.dialog-overlay[data-state="closed"] {
+  animation: overlay-out 0.16s ease-in;
+}
+
+.dialog-content[data-state="open"] {
+  animation: dialog-in 0.26s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.dialog-content[data-state="closed"] {
+  animation: dialog-out 0.16s ease-in;
+}
+
+
+@keyframes overlay-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes overlay-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -48%) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+@keyframes dialog-out {
+  from {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, -48%) scale(0.97);
+  }
+}
+
+/* Custom scrollbars inside scrollable panels */
+.thin-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklab, var(--ink-subtle) 40%, transparent) transparent;
 }

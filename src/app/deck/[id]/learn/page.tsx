@@ -26,7 +26,8 @@ export default function LearnModePage({
     return () => unsub();
   }, []);
 
-  const deck = useLiveQuery(() => db.decks.get(deckId), [deckId]);
+  // `null` means "loaded but missing"; `undefined` means "still loading".
+  const deck = useLiveQuery(async () => (await db.decks.get(deckId)) ?? null, [deckId]);
   const cards = useLiveQuery(
     () => db.cards.where("deckId").equals(deckId).sortBy("order"),
     [deckId]
@@ -34,7 +35,7 @@ export default function LearnModePage({
 
   if (deck === undefined || cards === undefined) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-zinc-50 dark:bg-black text-zinc-500">
+      <div className="app-shell flex min-h-screen items-center justify-center text-sm text-ink-muted">
         Загрузка режима заучивания...
       </div>
     );
@@ -42,15 +43,15 @@ export default function LearnModePage({
 
   if (!deck) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-zinc-50 dark:bg-black text-center space-y-4">
-        <h2 className="text-xl font-bold">Колода не найдена</h2>
+      <div className="app-shell flex min-h-screen flex-col items-center justify-center gap-4 p-4 text-center">
+        <h2 className="text-xl font-bold text-ink">Колода не найдена</h2>
         <Button onClick={() => router.push("/")}>На главную</Button>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-black text-zinc-900 dark:text-zinc-100 flex flex-col">
+    <div className="app-shell flex min-h-screen flex-col">
       <LearnMode
         deck={deck}
         cards={cards}

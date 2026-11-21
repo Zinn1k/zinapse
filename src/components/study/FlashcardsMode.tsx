@@ -27,6 +27,8 @@ import {
   type IntervalPreview,
 } from "@/lib/fsrs";
 import { speakText } from "@/lib/speech";
+import { scheduleSync } from "@/lib/sync";
+import { useSettings } from "@/hooks/use-settings";
 import {
   hasCloze,
   renderClozeQuestion,
@@ -36,6 +38,7 @@ import {
 import { MarkdownMath } from "../MarkdownMath";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
 import confetti from "canvas-confetti";
 
 export type StudyModeType = "fsrs" | "cram";
@@ -64,6 +67,10 @@ export function FlashcardsMode({
   const [isCompleted, setIsCompleted] = useState(false);
   const [loading, setLoading] = useState(true);
 
+  // Retention target chosen in Settings — feeds both the interval previews
+  // and the scheduler, so the slider has a visible effect.
+  const { requestRetention } = useSettings(userId);
+
   // Load study queue based on mode
   const loadQueue = useCallback(
     async (selectedMode: StudyModeType) => {
@@ -80,7 +87,7 @@ export function FlashcardsMode({
       }
 
       if (selectedMode === "fsrs") {
-        const todayQueue = await getTodayFSRSQueue(deck.id, userId, Math.max(50, initialCards.length));
+        const todayQueue = await getTodayFSRSQueue(deck.id, userId);
         setQueue(todayQueue);
       } else {
         // Cram mode: all cards shuffled or in order
@@ -103,12 +110,12 @@ export function FlashcardsMode({
     setIsFlipped(false);
     setShowHint(false);
 
-    getFSRSIntervalPreviews(currentCard.id, deck.id, userId, 0.9, "ru").then(
+    getFSRSIntervalPreviews(currentCard.id, deck.id, userId, requestRetention, "ru").then(
       (previews) => {
         setIntervals(previews);
       }
     );
-  }, [currentCard, deck.id, userId, mode]);
+  }, [currentCard, deck.id, userId, mode, requestRetention]);
 
   const handleFlip = useCallback(() => {
     setIsFlipped((f) => !f);
@@ -137,10 +144,11 @@ export function FlashcardsMode({
   const handleRateFSRS = useCallback(
     async (rating: Rating) => {
       if (!currentCard) return;
-      await rateCardFSRS(currentCard.id, deck.id, userId, rating);
+      await rateCardFSRS(currentCard.id, deck.id, userId, rating, { requestRetention });
+      scheduleSync(userId);
       handleNext();
     },
-    [currentCard, deck.id, handleNext, userId]
+    [currentCard, deck.id, handleNext, userId, requestRetention]
   );
 
   // Cram Mode Rating Handler
@@ -401,322 +409,350 @@ export function FlashcardsMode({
 
   return (
     <div
-      className={`flex flex-col h-full max-w-4xl mx-auto px-4 py-4 ${
+      className={
         isFullscreen
-          ? "fixed inset-0 z-50 bg-white dark:bg-zinc-950 p-6 max-w-none"
-          : ""
-      }`}
+          ? "app-shell fixed inset-0 z-50 flex flex-col"
+          : "app-shell flex min-h-screen flex-col"
+      }
     >
-      {/* Top Bar */}
-      <div className="flex items-center justify-between mb-4 gap-2 flex-wrap">
-        <button
-          onClick={onExit}
-          className="flex items-center space-x-1.5 text-xs font-medium text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          <span>Назад к колоде</span>
-        </button>
+      {/* Top bar */}
+      <header className="glass sticky top-0 z-30 border-b border-line/80">
+        <div className="mx-auto flex h-16 max-w-4xl items-center justify-between gap-2 px-3 sm:px-4">
+          <button
+            onClick={onExit}
+            className="inline-flex items-center gap-1.5 rounded-xl px-2.5 py-2 text-xs font-semibold text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            <span className="hidden sm:inline">К колоде</span>
+          </button>
 
-        {/* Mode Switcher: FSRS vs Cram */}
-        <div className="flex items-center p-1 rounded-xl bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800">
-          <button
-            onClick={() => setMode("fsrs")}
-            className={`flex items-center space-x-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition ${
-              mode === "fsrs"
-                ? "bg-white dark:bg-zinc-800 text-indigo-600 dark:text-indigo-400 shadow-sm"
-                : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-300"
-            }`}
-          >
-            <Clock className="w-3.5 h-3.5" />
-            <span>FSRS (Интервалы)</span>
-          </button>
-          <button
-            onClick={() => setMode("cram")}
-            className={`flex items-center space-x-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition ${
-              mode === "cram"
-                ? "bg-white dark:bg-zinc-800 text-amber-600 dark:text-amber-400 shadow-sm"
-                : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-300"
-            }`}
-          >
-            <Zap className="w-3.5 h-3.5" />
-            <span>Зубрежка (Cram)</span>
-          </button>
-        </div>
-
-        {/* Controls */}
-        <div className="flex items-center space-x-2">
-          <button
-            onClick={() => {
-              setIsReversed((r) => !r);
-              setIsFlipped(false);
-            }}
-            className={`p-1.5 rounded-lg border transition ${
-              isReversed
-                ? "bg-indigo-50 border-indigo-300 dark:bg-indigo-950/60 dark:border-indigo-800 text-indigo-600 dark:text-indigo-400 font-semibold"
-                : "border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-900"
-            }`}
-            title={
-              isReversed
-                ? "Обратный режим (Определение → Термин)"
-                : "Включить обратный режим (Определение → Термин)"
-            }
-          >
-            <ArrowLeftRight className="w-4 h-4" />
-          </button>
-          <button
-            onClick={handleShuffle}
-            className="p-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-900 text-zinc-600 dark:text-zinc-400 transition"
-            title="Перемешать карточки"
-          >
-            <Shuffle className="w-4 h-4" />
-          </button>
-          <button
-            onClick={() => setIsFullscreen(!isFullscreen)}
-            className="p-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-900 text-zinc-600 dark:text-zinc-400 transition"
-            title={isFullscreen ? "Выйти из полноэкранного режима" : "Полноэкранный режим"}
-          >
-            {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-          </button>
-        </div>
-      </div>
-
-      {/* Progress & Badge */}
-      <div className="space-y-2 mb-6">
-        <div className="flex items-center justify-between text-xs font-semibold text-zinc-500">
-          <span className="flex items-center space-x-1.5">
-            <Badge variant={mode === "fsrs" ? "default" : "warning"} className="text-[10px]">
-              {mode === "fsrs" ? "FSRS Spaced" : "Cram Loop"}
-            </Badge>
-            <span>{deck.title}</span>
-          </span>
-          <span className="font-mono">
-            {currentIndex + 1} / {queue.length}
-          </span>
-        </div>
-        <div className="w-full bg-zinc-200 dark:bg-zinc-800 h-1.5 rounded-full overflow-hidden">
+          {/* Mode switcher */}
           <div
-            className="bg-indigo-600 h-full transition-all duration-300 rounded-full"
-            style={{ width: `${((currentIndex + 1) / queue.length) * 100}%` }}
-          />
-        </div>
-      </div>
+            role="group"
+            aria-label="Режим повторения"
+            className="flex items-center gap-0.5 rounded-xl border border-line bg-surface-2 p-1"
+          >
+            <button
+              onClick={() => setMode("fsrs")}
+              aria-pressed={mode === "fsrs"}
+              className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-all ${
+                mode === "fsrs"
+                  ? "bg-surface text-brand shadow-sm"
+                  : "text-ink-muted hover:text-ink"
+              }`}
+            >
+              <Clock className="h-3.5 w-3.5" />
+              <span>FSRS</span>
+            </button>
+            <button
+              onClick={() => setMode("cram")}
+              aria-pressed={mode === "cram"}
+              className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-all ${
+                mode === "cram"
+                  ? "bg-surface text-amber-600 shadow-sm dark:text-amber-400"
+                  : "text-ink-muted hover:text-ink"
+              }`}
+            >
+              <Zap className="h-3.5 w-3.5" />
+              <span>Зубрёжка</span>
+            </button>
+          </div>
 
-      {/* 3D Flip Card Container with Mobile Swipe Support */}
-      <div className="flex-1 flex flex-col items-center justify-center min-h-[380px] sm:min-h-[460px] perspective-1000 w-full select-none cursor-pointer">
-        <motion.div
-          onClick={handleFlip}
-          drag="x"
-          dragConstraints={{ left: 0, right: 0 }}
-          dragElastic={0.4}
-          onDragEnd={handleDragEnd}
-          className="relative w-full h-full max-w-3xl transform-style-3d shadow-xl rounded-3xl"
-          animate={{ rotateY: isFlipped ? 180 : 0 }}
-          transition={{ duration: 0.45, ease: "easeInOut" }}
-        >
-          {/* FRONT SIDE */}
-          <div className="absolute inset-0 backface-hidden w-full h-full p-8 sm:p-12 rounded-3xl bg-white dark:bg-zinc-900 border-2 border-zinc-200/80 dark:border-zinc-800 flex flex-col justify-between overflow-y-auto">
-            <div className="flex items-center justify-between text-xs text-zinc-400">
-              <span className="uppercase tracking-widest font-semibold text-indigo-500">
-                {frontLabel}
-              </span>
-              <div className="flex items-center space-x-2">
-                {currentCard.hint && (
+          {/* Controls */}
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => {
+                setIsReversed((r) => !r);
+                setIsFlipped(false);
+              }}
+              aria-pressed={isReversed}
+              aria-label="Обратный режим: определение → термин"
+              className={`rounded-xl border p-2 transition-colors ${
+                isReversed
+                  ? "border-brand/40 bg-brand/10 text-brand"
+                  : "border-line text-ink-muted hover:bg-surface-2 hover:text-ink"
+              }`}
+              title={isReversed ? "Обратный режим включён" : "Обратный режим"}
+            >
+              <ArrowLeftRight className="h-4 w-4" />
+            </button>
+            <button
+              onClick={handleShuffle}
+              aria-label="Перемешать карточки"
+              className="rounded-xl border border-line p-2 text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink"
+              title="Перемешать"
+            >
+              <Shuffle className="h-4 w-4" />
+            </button>
+            <button
+              onClick={() => setIsFullscreen(!isFullscreen)}
+              aria-label={isFullscreen ? "Выйти из полноэкранного режима" : "Полноэкранный режим"}
+              className="rounded-xl border border-line p-2 text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink"
+              title={isFullscreen ? "Выйти из полноэкранного режима" : "Полноэкранный режим"}
+            >
+              {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col px-4 py-5">
+        {/* Progress */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between gap-3 text-xs">
+            <div className="flex min-w-0 items-center gap-2">
+              <Badge
+                variant={mode === "fsrs" ? "brand" : "warning"}
+                className="shrink-0 text-[10px] uppercase tracking-wide"
+              >
+                {mode === "fsrs" ? "FSRS" : "Cram"}
+              </Badge>
+              <span className="truncate font-semibold text-ink">{deck.title}</span>
+            </div>
+            <span className="shrink-0 font-mono text-ink-subtle">
+              {currentIndex + 1} / {queue.length}
+            </span>
+          </div>
+          <Progress value={((currentIndex + 1) / queue.length) * 100} className="h-1.5" />
+        </div>
+
+        {/* Card stage */}
+        <div className="perspective-1000 flex flex-1 items-center justify-center py-6">
+          <motion.div
+            onClick={handleFlip}
+            drag="x"
+            dragConstraints={{ left: 0, right: 0 }}
+            dragElastic={0.4}
+            onDragEnd={handleDragEnd}
+            className="relative h-[clamp(340px,54vh,470px)] w-full max-w-2xl transform-style-3d select-none rounded-[2rem]"
+            animate={{ rotateY: isFlipped ? 180 : 0 }}
+            transition={{ duration: 0.45, ease: "easeInOut" }}
+          >
+            {/* FRONT SIDE */}
+            <div className="absolute inset-0 flex h-full w-full flex-col justify-between overflow-y-auto rounded-[2rem] border border-line bg-surface p-6 shadow-[0_30px_80px_-45px_rgba(0,0,0,0.55)] backface-hidden sm:p-8">
+              <div
+                aria-hidden
+                className="pointer-events-none absolute inset-x-0 top-0 h-28 rounded-t-[2rem] bg-gradient-to-b from-indigo-500/10 to-transparent"
+              />
+
+              <div className="relative flex items-center justify-between text-xs text-ink-subtle">
+                <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-indigo-500">
+                  {frontLabel}
+                </span>
+                <div className="flex items-center gap-1">
+                  {currentCard.hint && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowHint(!showHint);
+                      }}
+                      aria-label="Показать или скрыть подсказку"
+                      className="rounded-lg p-1.5 text-amber-500 transition-colors hover:bg-amber-500/10"
+                      title="Подсказка"
+                    >
+                      <HelpCircle className="h-4 w-4" />
+                    </button>
+                  )}
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      setShowHint(!showHint);
+                      handleTTS(e);
                     }}
-                    className="p-1 text-amber-500 hover:text-amber-600"
-                    title="Показать / скрыть подсказку"
+                    aria-label="Озвучить карточку"
+                    className="rounded-lg p-1.5 text-ink-subtle transition-colors hover:bg-surface-2 hover:text-brand"
+                    title="Озвучить"
                   >
-                    <HelpCircle className="w-4 h-4" />
+                    <Volume2 className="h-4 w-4" />
                   </button>
+                </div>
+              </div>
+
+              <div className="relative my-auto space-y-4 py-4 text-center">
+                <div className="text-xl font-semibold leading-snug text-ink sm:text-3xl">
+                  <MarkdownMath content={displayFront} />
+                </div>
+
+                {(isReversed
+                  ? currentCard.backImage
+                  : currentCard.imageData || currentCard.frontImage) && (
+                  <img
+                    src={
+                      isReversed
+                        ? currentCard.backImage
+                        : currentCard.imageData || currentCard.frontImage
+                    }
+                    alt="Иллюстрация карточки"
+                    className="mx-auto max-h-52 rounded-xl border border-line object-contain shadow-sm"
+                  />
                 )}
+
+                {showHint && currentCard.hint && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="inline-block rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-700 dark:text-amber-300"
+                  >
+                    Подсказка: {currentCard.hint}
+                  </motion.div>
+                )}
+              </div>
+
+              <div className="relative text-center text-[11px] text-ink-subtle">
+                Нажмите на карточку или{" "}
+                <kbd className="rounded-md border border-line bg-surface-2 px-1.5 py-0.5 font-mono text-[10px]">
+                  Пробел
+                </kbd>
+              </div>
+            </div>
+
+            {/* BACK SIDE */}
+            <div className="absolute inset-0 flex h-full w-full rotate-y-180 flex-col justify-between overflow-y-auto rounded-[2rem] border border-line bg-surface p-6 shadow-[0_30px_80px_-45px_rgba(0,0,0,0.55)] ring-2 ring-indigo-500/25 backface-hidden sm:p-8">
+              <div
+                aria-hidden
+                className="pointer-events-none absolute inset-x-0 top-0 h-28 rounded-t-[2rem] bg-gradient-to-b from-emerald-500/10 to-transparent"
+              />
+
+              <div className="relative flex items-center justify-between text-xs text-ink-subtle">
+                <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-emerald-500">
+                  {backLabel}
+                </span>
                 <button
-                  onClick={handleTTS}
-                  className="p-1 text-zinc-400 hover:text-indigo-500 transition"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleTTS(e);
+                  }}
+                  aria-label="Озвучить ответ"
+                  className="rounded-lg p-1.5 text-ink-subtle transition-colors hover:bg-surface-2 hover:text-brand"
                   title="Озвучить"
                 >
-                  <Volume2 className="w-4 h-4" />
+                  <Volume2 className="h-4 w-4" />
                 </button>
               </div>
-            </div>
 
-            <div className="my-auto py-4 text-center">
-              <div className="text-xl sm:text-2xl font-medium text-zinc-900 dark:text-white leading-relaxed">
-                <MarkdownMath content={displayFront} />
+              <div className="relative my-auto space-y-4 py-4 text-center">
+                <div className="text-lg leading-relaxed text-ink sm:text-xl">
+                  <MarkdownMath content={displayBack} />
+                </div>
+
+                {(isReversed
+                  ? currentCard.imageData || currentCard.frontImage
+                  : currentCard.backImage) && (
+                  <img
+                    src={
+                      isReversed
+                        ? currentCard.imageData || currentCard.frontImage
+                        : currentCard.backImage
+                    }
+                    alt="Иллюстрация ответа"
+                    className="mx-auto max-h-52 rounded-xl border border-line object-contain shadow-sm"
+                  />
+                )}
               </div>
 
-              {(isReversed
-                ? currentCard.backImage
-                : currentCard.imageData || currentCard.frontImage) && (
-                <img
-                  src={
-                    isReversed
-                      ? currentCard.backImage
-                      : currentCard.imageData || currentCard.frontImage
-                  }
-                  alt="Illustration"
-                  className="mt-6 max-h-56 mx-auto rounded-xl object-contain shadow-sm border border-zinc-100 dark:border-zinc-800"
-                />
-              )}
-
-              {showHint && currentCard.hint && (
-                <motion.div
-                  initial={{ opacity: 0, y: 5 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="mt-4 p-2 text-xs rounded-lg bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 inline-block border border-amber-200 dark:border-amber-900"
-                >
-                  Подсказка: {currentCard.hint}
-                </motion.div>
-              )}
+              <div className="relative text-center text-[11px] text-ink-subtle">
+                {mode === "fsrs"
+                  ? "Оцените, насколько легко вспомнили ответ"
+                  : "Отметьте, вспомнили ли вы карточку"}
+              </div>
             </div>
+          </motion.div>
+        </div>
 
-            <div className="text-center text-xs text-zinc-400">
-              Нажмите мышью или{" "}
-              <kbd className="px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-[10px] font-mono">
-                Пробел
-              </kbd>
-              , чтобы перевернуть
+        {/* Controls */}
+        <div className="mt-2 space-y-3">
+          {mode === "fsrs" ? (
+            /* FSRS rating buttons */
+            <div className="mx-auto grid max-w-2xl grid-cols-4 gap-2">
+              {intervals.map((item) => {
+                const colors: Record<Rating, string> = {
+                  [Rating.Manual]: "border-line bg-surface-2 text-ink-muted",
+                  [Rating.Again]:
+                    "border-red-500/30 bg-red-500/10 text-red-600 hover:bg-red-500/15 dark:text-red-400",
+                  [Rating.Hard]:
+                    "border-amber-500/30 bg-amber-500/10 text-amber-600 hover:bg-amber-500/15 dark:text-amber-400",
+                  [Rating.Good]:
+                    "border-indigo-500/30 bg-indigo-500/10 text-indigo-600 hover:bg-indigo-500/15 dark:text-indigo-300",
+                  [Rating.Easy]:
+                    "border-emerald-500/30 bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/15 dark:text-emerald-400",
+                };
+
+                return (
+                  <button
+                    key={item.rating}
+                    onClick={() => handleRateFSRS(item.rating)}
+                    className={`flex flex-col items-center justify-center rounded-2xl border px-2 py-2.5 shadow-sm transition-all active:scale-[0.97] ${colors[item.rating]}`}
+                    aria-label={`${item.label}, следующий показ через ${item.intervalText}`}
+                  >
+                    <span className="text-xs font-bold">{item.label}</span>
+                    <span className="mt-0.5 font-mono text-[11px] opacity-80">
+                      {item.intervalText}
+                    </span>
+                    <span className="mt-0.5 hidden text-[9px] opacity-50 sm:inline">
+                      клавиша {item.rating}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
-          </div>
-
-          {/* BACK SIDE */}
-          <div className="absolute inset-0 backface-hidden rotate-y-180 w-full h-full p-8 sm:p-12 rounded-3xl bg-white dark:bg-zinc-900 border-2 border-indigo-500/40 dark:border-indigo-500/30 flex flex-col justify-between overflow-y-auto">
-            <div className="flex items-center justify-between text-xs text-zinc-400">
-              <span className="uppercase tracking-widest font-semibold text-emerald-500">
-                {backLabel}
-              </span>
-              <button
-                onClick={handleTTS}
-                className="p-1 text-zinc-400 hover:text-indigo-500 transition"
-                title="Озвучить"
+          ) : (
+            /* Cram quick actions */
+            <div className="mx-auto grid max-w-lg grid-cols-2 gap-3">
+              <Button
+                variant="outline"
+                size="lg"
+                onClick={() => handleCramResult(false)}
+                className="border-red-500/30 text-red-600 hover:bg-red-500/10 dark:text-red-400"
               >
-                <Volume2 className="w-4 h-4" />
-              </button>
+                <ChevronLeft />
+                <span>Не знаю</span>
+              </Button>
+
+              <Button
+                size="lg"
+                onClick={() => handleCramResult(true)}
+                className="bg-gradient-to-b from-emerald-500 to-emerald-600 text-white shadow-emerald-900/20 hover:from-emerald-400 hover:to-emerald-500"
+              >
+                <span>Знаю</span>
+                <ChevronRight />
+              </Button>
             </div>
+          )}
 
-            <div className="my-auto py-4 text-center">
-              <div className="text-lg sm:text-xl text-zinc-800 dark:text-zinc-100 leading-relaxed">
-                <MarkdownMath content={displayBack} />
-              </div>
-
-              {(isReversed
-                ? currentCard.imageData || currentCard.frontImage
-                : currentCard.backImage) && (
-                <img
-                  src={
-                    isReversed
-                      ? currentCard.imageData || currentCard.frontImage
-                      : currentCard.backImage
-                  }
-                  alt="Back illustration"
-                  className="mt-6 max-h-56 mx-auto rounded-xl object-contain shadow-sm border border-zinc-100 dark:border-zinc-800"
-                />
-              )}
-            </div>
-
-            <div className="text-center text-xs text-zinc-400">
-              {mode === "fsrs"
-                ? "Оцените, насколько легко вы вспомнили ответ для FSRS интервала"
-                : "Отметьте, вспомнили ли вы карточку"}
-            </div>
-          </div>
-        </motion.div>
-      </div>
-
-      {/* Bottom Controls */}
-      <div className="mt-6 space-y-3">
-        {mode === "fsrs" ? (
-          /* FSRS Rating Buttons */
-          <div className="grid grid-cols-4 gap-2 sm:gap-3 max-w-2xl mx-auto">
-            {intervals.map((item) => {
-              const colors: Record<Rating, string> = {
-                [Rating.Manual]: "bg-zinc-50 border-zinc-200 text-zinc-600",
-                [Rating.Again]:
-                  "bg-red-50 hover:bg-red-100 dark:bg-red-950/30 dark:hover:bg-red-950/50 border-red-200 dark:border-red-900/60 text-red-600 dark:text-red-400",
-                [Rating.Hard]:
-                  "bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/30 dark:hover:bg-amber-950/50 border-amber-200 dark:border-amber-900/60 text-amber-600 dark:text-amber-400",
-                [Rating.Good]:
-                  "bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/30 dark:hover:bg-blue-950/50 border-blue-200 dark:border-blue-900/60 text-blue-600 dark:text-blue-400",
-                [Rating.Easy]:
-                  "bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/30 dark:hover:bg-emerald-950/50 border-emerald-200 dark:border-emerald-900/60 text-emerald-600 dark:text-emerald-400",
-              };
-
-              return (
-                <button
-                  key={item.rating}
-                  onClick={() => handleRateFSRS(item.rating)}
-                  className={`py-2 px-2 sm:px-3 rounded-xl border flex flex-col items-center justify-center transition active:scale-95 shadow-sm ${colors[item.rating]}`}
-                >
-                  <span className="text-xs font-bold">{item.label}</span>
-                  <span className="text-[11px] font-mono opacity-80 mt-0.5">
-                    {item.intervalText}
-                  </span>
-                  <span className="text-[9px] opacity-60 hidden sm:inline">
-                    [{item.rating}]
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        ) : (
-          /* Cram Mode Quick Actions */
-          <div className="grid grid-cols-2 gap-4 max-w-lg mx-auto">
-            <Button
-              variant="outline"
-              size="lg"
-              onClick={() => handleCramResult(false)}
-              className="border-red-300 dark:border-red-900/60 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 font-semibold"
+          {/* Previous / flip / next */}
+          <div className="flex items-center justify-center gap-3 pt-1">
+            <button
+              onClick={handlePrev}
+              disabled={currentIndex === 0}
+              aria-label="Предыдущая карточка"
+              className="rounded-full border border-line bg-surface p-2.5 text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink disabled:opacity-30"
+              title="Назад (←)"
             >
-              <ChevronLeft className="w-5 h-5 mr-1" />
-              <span>Не знаю (в конец очереди)</span>
-            </Button>
+              <ChevronLeft className="h-5 w-5" />
+            </button>
 
-            <Button
-              size="lg"
-              onClick={() => handleCramResult(true)}
-              className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold shadow-sm"
+            <button
+              onClick={handleFlip}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-line bg-surface px-4 py-2 text-xs font-semibold text-ink shadow-sm transition-colors hover:bg-surface-2"
             >
-              <span>Знаю (выучено)</span>
-              <ChevronRight className="w-5 h-5 ml-1" />
-            </Button>
+              <RotateCw className="h-3.5 w-3.5" />
+              <span>Перевернуть</span>
+            </button>
+
+            <button
+              onClick={handleNext}
+              aria-label="Следующая карточка"
+              className="rounded-full border border-line bg-surface p-2.5 text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink"
+              title="Вперёд (→)"
+            >
+              <ChevronRight className="h-5 w-5" />
+            </button>
           </div>
-        )}
 
-        {/* Previous / Flip / Next arrow buttons */}
-        <div className="flex items-center justify-center space-x-6 pt-1">
-          <button
-            onClick={handlePrev}
-            disabled={currentIndex === 0}
-            className="p-2.5 rounded-full border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-900 disabled:opacity-30 transition"
-            title="Назад (Стрелка влево)"
-          >
-            <ChevronLeft className="w-5 h-5 text-zinc-700 dark:text-zinc-300" />
-          </button>
-
-          <button
-            onClick={handleFlip}
-            className="flex items-center space-x-1.5 px-4 py-2 rounded-xl bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-xs font-medium text-zinc-700 dark:text-zinc-200 transition"
-          >
-            <RotateCw className="w-3.5 h-3.5" />
-            <span>Перевернуть</span>
-          </button>
-
-          <button
-            onClick={handleNext}
-            className="p-2.5 rounded-full border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-900 transition"
-            title="Вперед (Стрелка вправо)"
-          >
-            <ChevronRight className="w-5 h-5 text-zinc-700 dark:text-zinc-300" />
-          </button>
+          <div className="text-center text-[11px] text-ink-subtle sm:hidden">
+            Свайп влево — не знаю, вправо — знаю
+          </div>
         </div>
-
-        {/* Mobile swipe hint */}
-        <div className="text-center text-[11px] text-zinc-400 sm:hidden">
-          Свайп влево: Не знаю • Свайп вправо: Знаю
-        </div>
-      </div>
+      </main>
     </div>
   );
 }

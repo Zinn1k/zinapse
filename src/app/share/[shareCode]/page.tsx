@@ -211,18 +211,18 @@ export default function SharedDeckPage({
   const activeDeckId = localDeckId || deck.id;
 
   return (
-    <div className="min-h-screen bg-background text-foreground flex flex-col pb-16">
+    <div className="app-shell flex min-h-screen flex-col pb-16">
       {/* Top Navbar */}
-      <header className="sticky top-0 z-20 border-b bg-background/95 backdrop-blur px-4 py-3 flex items-center justify-between">
+      <header className="glass sticky top-0 z-20 flex items-center justify-between border-b border-line/80 px-4 py-3">
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="icon" asChild>
             <Link href="/" aria-label="Все колоды">
-              <ArrowLeft className="w-5 h-5" />
+              <ArrowLeft className="h-5 w-5" />
             </Link>
           </Button>
           <div>
             <div className="flex items-center gap-1.5">
-              <Share2 className="w-4 h-4 text-primary" />
+              <Share2 className="h-4 w-4 text-brand" />
               <h1 className="font-bold text-sm sm:text-base leading-none">
                 Общая колода
               </h1>

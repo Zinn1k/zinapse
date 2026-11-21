@@ -12,6 +12,10 @@ import {
   RotateCcw,
   Download,
   Upload,
+  Sun,
+  Moon,
+  Monitor,
+  Palette,
 } from "lucide-react";
 import {
   db,
@@ -22,6 +26,8 @@ import {
 import { getAvailableVoices, speakText } from "@/lib/speech";
 import { isFirebaseConfigured } from "@/lib/firebase";
 import { checkForAppUpdates, APP_CURRENT_VERSION } from "@/lib/updater";
+import { useTheme } from "@/components/ThemeProvider";
+import type { ThemePreference } from "@/lib/theme";
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -30,6 +36,7 @@ interface SettingsModalProps {
 }
 
 export function SettingsModal({ isOpen, onClose, userId }: SettingsModalProps) {
+  const { theme, setTheme } = useTheme();
   const [apiKey, setApiKey] = useState("");
   const [geminiModel, setGeminiModel] = useState("gemini-3.5-flash-lite");
   const [retention, setRetention] = useState(0.9);
@@ -77,7 +84,7 @@ export function SettingsModal({ isOpen, onClose, userId }: SettingsModalProps) {
       geminiApiKey: apiKey.trim(),
       geminiModel: geminiModel || "gemini-3.5-flash-lite",
       requestRetention: retention,
-      theme: "dark",
+      theme,
       voiceName,
       voiceSpeed,
     });
@@ -185,7 +192,52 @@ export function SettingsModal({ isOpen, onClose, userId }: SettingsModalProps) {
         </div>
 
         {/* Body */}
-        <div className="p-6 space-y-6 overflow-y-auto">
+        <div className="p-6 space-y-6 overflow-y-auto thin-scroll">
+          {/* Appearance */}
+          <div className="space-y-3">
+            <label className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 flex items-center space-x-2">
+              <Palette className="w-4 h-4 text-violet-500" />
+              <span>Тема оформления</span>
+            </label>
+            <div
+              role="radiogroup"
+              aria-label="Тема оформления"
+              className="grid grid-cols-3 gap-2 p-1 rounded-xl bg-zinc-100 dark:bg-zinc-800/70 border border-zinc-200/70 dark:border-zinc-800"
+            >
+              {(
+                [
+                  { value: "light", label: "Светлая", Icon: Sun },
+                  { value: "dark", label: "Тёмная", Icon: Moon },
+                  { value: "system", label: "Системная", Icon: Monitor },
+                ] as { value: ThemePreference; label: string; Icon: typeof Sun }[]
+              ).map(({ value, label, Icon }) => {
+                const active = theme === value;
+                return (
+                  <button
+                    key={value}
+                    type="button"
+                    role="radio"
+                    aria-checked={active}
+                    onClick={() => setTheme(value)}
+                    className={`flex items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs font-semibold transition ${
+                      active
+                        ? "bg-white text-indigo-600 shadow-sm ring-1 ring-indigo-500/30 dark:bg-zinc-900 dark:text-indigo-300"
+                        : "text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-100"
+                    }`}
+                  >
+                    <Icon className="w-3.5 h-3.5" />
+                    <span>{label}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">
+              «Системная» следует настройке устройства. Выбор применяется мгновенно и запоминается на этом устройстве.
+            </p>
+          </div>
+
+          <hr className="border-zinc-200 dark:border-zinc-800" />
+
           {/* FSRS Settings */}
           <div className="space-y-3">
             <div className="flex items-center justify-between">

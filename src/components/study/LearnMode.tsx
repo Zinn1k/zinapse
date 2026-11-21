@@ -15,6 +15,8 @@ import {
 } from "lucide-react";
 import { type Card, type Deck } from "@/lib/db";
 import { rateCardFSRS, Rating } from "@/lib/fsrs";
+import { scheduleSync } from "@/lib/sync";
+import { useSettings } from "@/hooks/use-settings";
 import { speakText } from "@/lib/speech";
 import { sound } from "@/lib/sound";
 import { checkAnswerWithFuzzy, type CheckAnswerResult } from "@/lib/levenshtein";
@@ -56,6 +58,18 @@ export function LearnMode({
   const [cardStates, setCardStates] = useState<Map<string, LearnCardState>>(new Map());
   const [activeQueue, setActiveQueue] = useState<string[]>([]);
   const [currentId, setCurrentId] = useState<string | null>(null);
+
+  const { requestRetention } = useSettings(userId);
+
+  /** Rates the active card with the user's retention target and queues a sync. */
+  const rateActiveCard = useCallback(
+    (cardId: string, rating: Rating) => {
+      void rateCardFSRS(cardId, deck.id, userId, rating, { requestRetention })
+        .then(() => scheduleSync(userId))
+        .catch(() => {});
+    },
+    [deck.id, userId, requestRetention]
+  );
 
   // Question state
   const [mcOptions, setMcOptions] = useState<string[]>([]);
@@ -154,12 +168,7 @@ export function LearnMode({
         }
       });
 
-      // If fewer than 3 other cards in deck, fill with generic options
-      let fallbackIndex = 1;
-      while (distractors.length < 3) {
-        distractors.push(`Вариант ${fallbackIndex++}`);
-      }
-
+      {/* Distractors come from other cards only — no filler "Вариант N" noise. */}
       const allChoices = [...distractors, correctDef].sort(() => Math.random() - 0.5);
       const correctIdx = allChoices.indexOf(correctDef);
 
@@ -205,14 +214,14 @@ export function LearnMode({
       if (correct) {
         sound.playSuccess();
         setSessionStreak((s) => s + 1);
-        rateCardFSRS(currentId, deck.id, userId, Rating.Good);
+        rateActiveCard(currentId, Rating.Good);
       } else {
         sound.playError();
         setSessionStreak(0);
-        rateCardFSRS(currentId, deck.id, userId, Rating.Again);
+        rateActiveCard(currentId, Rating.Again);
       }
     },
-    [currentId, currentItem, deck.id, isAnswered, mcCorrectIndex, userId]
+    [currentId, currentItem, isAnswered, mcCorrectIndex, rateActiveCard]
   );
 
   // Handle Stage 2: Written submission with Levenshtein fuzzy checking
@@ -228,7 +237,7 @@ export function LearnMode({
       sound.playSuccess();
       setIsSuccess(true);
       setSessionStreak((s) => s + 1);
-      rateCardFSRS(currentId, deck.id, userId, Rating.Good);
+      rateActiveCard(currentId, Rating.Good);
     } else if (result.isClose) {
       // Typo detected: let user decide with "Засчитать мой ответ"
       sound.playError();
@@ -237,7 +246,7 @@ export function LearnMode({
       sound.playError();
       setIsSuccess(false);
       setSessionStreak(0);
-      rateCardFSRS(currentId, deck.id, userId, Rating.Again);
+      rateActiveCard(currentId, Rating.Again);
     }
   };
 
@@ -247,7 +256,7 @@ export function LearnMode({
     sound.playSuccess();
     setIsSuccess(true);
     setSessionStreak((s) => s + 1);
-    rateCardFSRS(currentId, deck.id, userId, Rating.Good);
+    rateActiveCard(currentId, Rating.Good);
   };
 
   // Transition to next question in active queue
@@ -364,53 +373,54 @@ export function LearnMode({
   }
 
   return (
-    <div className="max-w-3xl mx-auto px-4 py-4 space-y-6">
-      {/* Top Header */}
-      <div className="flex items-center justify-between">
-        <button
-          onClick={onExit}
-          className="flex items-center space-x-1.5 text-xs font-semibold text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          <span>Выйти из Заучивания</span>
-        </button>
-
-        <div className="flex items-center space-x-3">
-          {sessionStreak > 1 && (
-            <div className="flex items-center space-x-1 px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 font-bold text-xs border border-amber-500/20">
-              <Flame className="w-3.5 h-3.5 fill-current" />
-              <span>{sessionStreak} подряд</span>
-            </div>
-          )}
-
+    <div className="app-shell flex min-h-screen flex-col">
+      <header className="glass sticky top-0 z-30 border-b border-line/80">
+        <div className="mx-auto flex h-16 max-w-3xl items-center justify-between gap-3 px-4">
           <button
-            onClick={() => {
-              setIsReversed((r) => !r);
-            }}
-            className={`p-1.5 rounded-lg border transition ${
-              isReversed
-                ? "bg-indigo-50 border-indigo-300 dark:bg-indigo-950/60 dark:border-indigo-800 text-indigo-600 dark:text-indigo-400 font-semibold"
-                : "border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-900"
-            }`}
-            title="Обратный режим"
+            onClick={onExit}
+            className="inline-flex items-center gap-1.5 rounded-xl px-2.5 py-2 text-xs font-semibold text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink"
           >
-            <ArrowLeftRight className="w-4 h-4" />
+            <ArrowLeft className="h-4 w-4" />
+            <span>Выйти</span>
           </button>
 
-          <Badge variant="outline" className="text-xs font-mono">
-            Осталось: {activeQueue.length}
-          </Badge>
+          <div className="flex items-center gap-2">
+            {sessionStreak > 1 && (
+              <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/25 bg-amber-500/10 px-2.5 py-1 text-xs font-bold text-amber-600 dark:text-amber-400">
+                <Flame className="h-3.5 w-3.5 fill-current" />
+                {sessionStreak} подряд
+              </span>
+            )}
+
+            <button
+              onClick={() => setIsReversed((r) => !r)}
+              aria-pressed={isReversed}
+              aria-label="Обратный режим: определение → термин"
+              className={`rounded-xl border p-2 transition-colors ${
+                isReversed
+                  ? "border-brand/40 bg-brand/10 text-brand"
+                  : "border-line text-ink-muted hover:bg-surface-2 hover:text-ink"
+              }`}
+              title="Обратный режим"
+            >
+              <ArrowLeftRight className="h-4 w-4" />
+            </button>
+
+            <Badge variant="outline" className="font-mono text-xs">
+              Осталось: {activeQueue.length}
+            </Badge>
+          </div>
         </div>
-      </div>
+      </header>
+
+      <main className="mx-auto w-full max-w-3xl flex-1 space-y-5 px-4 py-6">
 
       {/* Progress Bar & Stage Indicator */}
       <div className="space-y-2">
-        <div className="flex items-center justify-between text-xs font-semibold text-zinc-500">
-          <span className="flex items-center space-x-2">
-            <span className="font-bold text-indigo-600 dark:text-indigo-400">
-              Усвоение: {progressPercent}%
-            </span>
-            <span>
+        <div className="flex items-center justify-between text-xs font-semibold">
+          <span className="flex items-center gap-2 text-ink-muted">
+            <span className="font-bold text-brand">Усвоение {progressPercent}%</span>
+            <span className="text-ink-subtle">
               ({masteredCards} из {totalCards} выучено)
             </span>
           </span>
@@ -475,7 +485,7 @@ export function LearnMode({
         /* Active Question Card */
         <div className="space-y-6">
           {/* Question Card Box */}
-          <div className="p-6 sm:p-8 rounded-3xl bg-white dark:bg-zinc-900 border-2 border-zinc-200 dark:border-zinc-800 shadow-sm space-y-4">
+          <div className="space-y-4 rounded-3xl border border-line bg-surface p-6 shadow-sm sm:p-8">
             <div className="flex items-center justify-between text-xs text-zinc-400">
               <span className="uppercase tracking-widest font-bold text-indigo-500">
                 {isReversed ? "Определение" : isClozeCard ? "Текст с пропуском" : "Термин"}
@@ -490,7 +500,7 @@ export function LearnMode({
               </button>
             </div>
 
-            <div className="text-xl sm:text-2xl font-medium text-zinc-900 dark:text-white leading-relaxed">
+            <div className="text-xl font-semibold leading-relaxed text-ink sm:text-2xl">
               <MarkdownMath content={promptText} />
             </div>
 
@@ -519,17 +529,17 @@ export function LearnMode({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {mcOptions.map((opt, idx) => {
                   let btnStyle =
-                    "border-zinc-200 dark:border-zinc-800 hover:border-indigo-500/50 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100";
+                    "border-line bg-surface text-ink hover:border-brand/50 hover:bg-surface-2";
 
                   if (isAnswered) {
                     if (idx === mcCorrectIndex) {
                       btnStyle =
-                        "border-emerald-500 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 font-semibold";
+                        "border-emerald-500/60 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 font-semibold";
                     } else if (idx === selectedMcIndex && !isSuccess) {
                       btnStyle =
-                        "border-red-500 bg-red-50 dark:bg-red-950/40 text-red-800 dark:text-red-300";
+                        "border-red-500/60 bg-red-500/10 text-red-700 dark:text-red-300";
                     } else {
-                      btnStyle = "opacity-40 border-zinc-200 dark:border-zinc-800";
+                      btnStyle = "border-line opacity-40";
                     }
                   }
 
@@ -539,9 +549,9 @@ export function LearnMode({
                       type="button"
                       disabled={isAnswered}
                       onClick={() => handleSelectOption(idx)}
-                      className={`p-4 rounded-2xl border text-left flex items-start space-x-3 transition active:scale-[0.98] ${btnStyle}`}
+                      className={`flex items-start gap-3 rounded-2xl border p-4 text-left shadow-sm transition-all active:scale-[0.98] ${btnStyle}`}
                     >
-                      <span className="flex-shrink-0 w-6 h-6 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-500 text-xs font-bold flex items-center justify-center">
+                      <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-lg bg-surface-2 text-xs font-bold text-ink-muted">
                         {idx + 1}
                       </span>
                       <div className="text-sm leading-snug flex-1">
@@ -652,6 +662,7 @@ export function LearnMode({
           )}
         </div>
       ) : null}
+      </main>
     </div>
   );
 }

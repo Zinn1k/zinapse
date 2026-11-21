@@ -13,7 +13,7 @@ import {
   LogOut,
   LogIn,
   WifiOff,
-  CheckCircle,
+  CheckCircle2,
 } from "lucide-react";
 import { ZinapseLogo } from "@/components/ZinapseLogo";
 import { AuthModal } from "@/components/AuthModal";
@@ -25,6 +25,7 @@ import {
 } from "@/lib/firebase";
 import { subscribeSyncState, triggerFullSync, type SyncState } from "@/lib/sync";
 import { db, GUEST_USER_ID } from "@/lib/db";
+import { useTheme } from "@/components/ThemeProvider";
 import type { User } from "firebase/auth";
 
 interface AppHeaderProps {
@@ -47,20 +48,10 @@ export function AppHeader({
     lastSyncedAt: null,
     error: null,
   });
-  const [isDark, setIsDark] = useState<boolean>(true);
   const [isAuthOpen, setIsAuthOpen] = useState<boolean>(false);
+  const { resolved, toggleTheme, ready: themeReady } = useTheme();
 
   useEffect(() => {
-    // Sync theme with document element
-    const savedTheme = localStorage.getItem("theme");
-    if (savedTheme === "light") {
-      setIsDark(false);
-      document.documentElement.classList.remove("dark");
-    } else {
-      setIsDark(true);
-      document.documentElement.classList.add("dark");
-    }
-
     // Handle redirect result if user returned from Google redirect auth
     handleRedirectResult().catch(() => {});
 
@@ -101,18 +92,6 @@ export function AppHeader({
     };
   }, [setCurrentUserId]);
 
-  const toggleTheme = () => {
-    if (isDark) {
-      document.documentElement.classList.remove("dark");
-      localStorage.setItem("theme", "light");
-      setIsDark(false);
-    } else {
-      document.documentElement.classList.add("dark");
-      localStorage.setItem("theme", "dark");
-      setIsDark(true);
-    }
-  };
-
   const handleManualSync = async () => {
     if (user) {
       await triggerFullSync(user.uid);
@@ -123,137 +102,155 @@ export function AppHeader({
     await signOutUser();
   };
 
+  const syncLabel = !syncState.isOnline
+    ? "Офлайн"
+    : !isFirebaseConfigured() || !user
+    ? "Локально"
+    : syncState.isSyncing
+    ? "Синхронизация…"
+    : syncState.pendingCount > 0
+    ? `В очереди: ${syncState.pendingCount}`
+    : "Синхронизировано";
+
   return (
-    <header className="sticky top-0 z-40 w-full border-b border-zinc-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-md">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+    <header className="glass sticky top-0 z-40 w-full border-b border-line/80">
+      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
         {/* Brand */}
-        <Link href="/" className="flex items-center space-x-3 group">
-          <div className="w-10 h-10 group-hover:scale-105 transition-transform">
-            <ZinapseLogo size={40} className="w-10 h-10 shadow-md shadow-indigo-500/25 rounded-2xl" />
-          </div>
-          <div>
-            <div className="flex items-center space-x-1.5">
-              <span className="font-extrabold text-xl tracking-tight bg-gradient-to-r from-zinc-950 via-indigo-950 to-zinc-800 dark:from-white dark:via-indigo-200 dark:to-zinc-100 bg-clip-text text-transparent">
+        <Link
+          href="/"
+          className="group flex shrink-0 items-center gap-3 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <ZinapseLogo
+            size={38}
+            className="h-9 w-9 rounded-xl shadow-lg shadow-indigo-500/25 transition-transform duration-300 group-hover:-rotate-6 group-hover:scale-105"
+          />
+          <span className="min-w-0">
+            <span className="flex items-center gap-2">
+              <span className="text-gradient text-xl font-extrabold tracking-tight">
                 Zinapse
               </span>
-              <span className="px-1.5 py-0.5 text-[10px] font-semibold bg-indigo-100 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 rounded border border-indigo-200 dark:border-indigo-800">
-                FSRS PWA
+              <span className="hidden rounded-full border border-brand/25 bg-brand/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-brand sm:inline">
+                FSRS
               </span>
-            </div>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400 hidden sm:block">
-              Бесплатный аналог Quizlet • Local-First
-            </p>
-          </div>
+            </span>
+            <span className="hidden text-xs text-ink-muted sm:block">
+              Local-first карточки · AI
+            </span>
+          </span>
         </Link>
 
-        {/* Right Controls */}
-        <div className="flex items-center space-x-2 sm:space-x-3">
-          {/* AI Generate Button */}
+        {/* Right controls */}
+        <div className="flex items-center gap-1.5 sm:gap-2">
           <button
             onClick={onOpenAIGenerate}
-            className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white text-sm font-medium shadow-sm transition-all hover:shadow hover:shadow-indigo-500/25 active:scale-95"
             title="Сгенерировать карточки с помощью Gemini AI"
+            className="group inline-flex h-9 items-center gap-1.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-3 text-sm font-semibold text-white shadow-sm shadow-indigo-600/30 transition-all hover:shadow-lg hover:shadow-indigo-600/35 active:scale-[0.97]"
           >
-            <Sparkles className="w-4 h-4 text-amber-300 animate-pulse" />
+            <Sparkles className="h-4 w-4 text-amber-200 transition-transform group-hover:scale-110" />
             <span className="hidden sm:inline">AI Колода</span>
           </button>
 
-          {/* Sync status indicator */}
-          {!syncState.isOnline ? (
-            <div
-              className="flex items-center space-x-1 px-2.5 py-1.5 rounded-lg text-xs font-medium border border-amber-500/30 bg-amber-500/10 text-amber-500"
-              title="Нет подключения к сети. Все изменения сохраняются локально в Dexie.js"
-            >
-              <WifiOff className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Офлайн</span>
-            </div>
-          ) : !isFirebaseConfigured() || !user ? (
-            <div
-              className="flex items-center space-x-1 px-2.5 py-1.5 rounded-lg text-xs font-medium border border-dashed border-zinc-300 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400"
-              title="100% Local-First режим. Войдите через Google для облачной синхронизации"
-            >
-              <CloudOff className="w-3.5 h-3.5 text-zinc-400" />
-              <span className="hidden sm:inline">Локально</span>
-            </div>
-          ) : (
-            <button
-              onClick={handleManualSync}
-              disabled={syncState.isSyncing}
-              className="flex items-center space-x-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-900 text-zinc-700 dark:text-zinc-300 transition"
-              title={
-                syncState.isSyncing
-                  ? "Синхронизация с Firestore..."
-                  : syncState.pendingCount > 0
-                  ? `В очереди ${syncState.pendingCount} изменений. Нажмите для синхронизации`
-                  : "Все данные синхронизированы с облаком"
-              }
-            >
-              {syncState.isSyncing ? (
-                <RefreshCw className="w-3.5 h-3.5 text-indigo-500 animate-spin" />
-              ) : syncState.pendingCount > 0 ? (
-                <Cloud className="w-3.5 h-3.5 text-amber-500" />
-              ) : (
-                <CheckCircle className="w-3.5 h-3.5 text-emerald-500" />
-              )}
-              <span className="hidden md:inline">
-                {syncState.isSyncing
-                  ? "Синхронизация..."
-                  : syncState.pendingCount > 0
-                  ? `В очереди: ${syncState.pendingCount}`
-                  : "Синхронизировано"}
-              </span>
-            </button>
-          )}
+          {/* Sync status */}
+          <button
+            onClick={handleManualSync}
+            disabled={!user || syncState.isSyncing || !syncState.isOnline}
+            title={
+              !syncState.isOnline
+                ? "Нет сети. Изменения сохраняются локально в IndexedDB"
+                : !isFirebaseConfigured() || !user
+                ? "100% local-first режим. Войдите, чтобы включить облачную синхронизацию"
+                : syncState.pendingCount > 0
+                ? `В очереди ${syncState.pendingCount} изменений — нажмите для синхронизации`
+                : "Все данные синхронизированы"
+            }
+            aria-label={`Статус синхронизации: ${syncLabel}`}
+            className={`inline-flex h-9 items-center gap-1.5 rounded-xl border px-2.5 text-xs font-semibold transition-colors disabled:cursor-default ${
+              !syncState.isOnline
+                ? "border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                : !isFirebaseConfigured() || !user
+                ? "border-dashed border-line text-ink-muted"
+                : "border-line bg-surface text-ink-muted hover:border-line-strong hover:text-ink"
+            }`}
+          >
+            {!syncState.isOnline ? (
+              <WifiOff className="h-3.5 w-3.5" />
+            ) : syncState.isSyncing ? (
+              <RefreshCw className="h-3.5 w-3.5 animate-spin text-brand" />
+            ) : !isFirebaseConfigured() || !user ? (
+              <CloudOff className="h-3.5 w-3.5" />
+            ) : syncState.pendingCount > 0 ? (
+              <Cloud className="h-3.5 w-3.5 text-amber-500" />
+            ) : (
+              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+            )}
+            <span className="hidden lg:inline">{syncLabel}</span>
+          </button>
 
-          {/* User Auth */}
+          {/* Auth */}
           {user ? (
-            <div className="flex items-center space-x-2 pl-1">
+            <div className="flex items-center gap-1">
               <div
-                className="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/60 border border-indigo-300 dark:border-indigo-700 flex items-center justify-center text-xs font-bold text-indigo-700 dark:text-indigo-300"
+                className="flex h-8 w-8 items-center justify-center rounded-full border border-brand/30 bg-brand/15 text-xs font-bold text-brand"
                 title={user.email || user.displayName || "Выполнен вход"}
               >
-                {user.displayName ? user.displayName[0].toUpperCase() : "U"}
+                {(user.displayName || user.email || "U").trim()[0]?.toUpperCase() || "U"}
               </div>
               <button
                 onClick={handleSignOut}
-                className="p-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-900 text-zinc-500 hover:text-red-500 transition"
+                aria-label="Выйти из аккаунта"
                 title="Выйти из аккаунта"
+                className="rounded-lg p-2 text-ink-subtle transition-colors hover:bg-red-500/10 hover:text-red-500"
               >
-                <LogOut className="w-4 h-4" />
+                <LogOut className="h-4 w-4" />
               </button>
             </div>
           ) : (
             <button
               onClick={() => setIsAuthOpen(true)}
-              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-800 dark:text-zinc-200 border border-zinc-200 dark:border-zinc-700 shadow-sm transition active:scale-95"
               title="Войти или создать аккаунт для синхронизации"
+              className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-line bg-surface px-2.5 text-xs font-semibold text-ink shadow-sm transition-colors hover:border-line-strong hover:bg-surface-2 active:scale-[0.97] sm:px-3"
             >
-              <LogIn className="w-3.5 h-3.5 text-indigo-500" />
+              <LogIn className="h-3.5 w-3.5 text-brand" />
               <span>Войти</span>
             </button>
           )}
 
-          {/* Theme Toggle */}
+          <div className="mx-0.5 hidden h-6 w-px bg-line sm:block" aria-hidden />
+
           <button
             onClick={toggleTheme}
-            className="p-2 rounded-lg text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-900 transition"
-            title={isDark ? "Переключить на светлую тему" : "Переключить на тёмную тему"}
+            aria-label={resolved === "dark" ? "Включить светлую тему" : "Включить тёмную тему"}
+            title={resolved === "dark" ? "Светлая тема" : "Тёмная тема"}
+            className="rounded-xl p-2 text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink"
           >
-            {isDark ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-zinc-600" />}
+            {!themeReady ? (
+              <span className="block h-4 w-4" />
+            ) : resolved === "dark" ? (
+              <Sun className="h-4 w-4 text-amber-400" />
+            ) : (
+              <Moon className="h-4 w-4 text-indigo-500" />
+            )}
           </button>
 
-          {/* Settings */}
           <button
             onClick={onOpenSettings}
-            className="p-2 rounded-lg text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-900 transition"
+            aria-label="Настройки"
             title="Настройки и параметры FSRS"
+            className="rounded-xl p-2 text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink"
           >
-            <Settings className="w-4 h-4" />
+            <Settings className="h-4 w-4" />
           </button>
         </div>
       </div>
 
-      {/* Account Authentication & Registration Modal */}
+      {/* Thin progress line while syncing */}
+      {syncState.isSyncing && (
+        <div
+          aria-hidden
+          className="animate-pulse-soft absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-brand to-transparent"
+        />
+      )}
+
       <AuthModal isOpen={isAuthOpen} onClose={() => setIsAuthOpen(false)} />
     </header>
   );

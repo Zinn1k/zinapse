@@ -12,6 +12,16 @@ import { generateId } from "./utils";
 
 export { Rating, State };
 
+/**
+ * How many brand-new cards a single FSRS session may introduce.
+ * Shared by the session queue and the "due today" badge so the two never
+ * disagree about the size of today's workload.
+ */
+export const NEW_CARD_DAILY_LIMIT = 20;
+
+/** Default retention target when the user has not chosen one. */
+export const DEFAULT_REQUEST_RETENTION = 0.9;
+
 export interface IntervalPreview {
   rating: Rating;
   label: string;
@@ -161,7 +171,7 @@ export async function getFSRSIntervalPreviews(
 export async function getTodayFSRSQueue(
   deckId: string,
   userId: string,
-  maxNewCards: number = 20
+  maxNewCards: number = NEW_CARD_DAILY_LIMIT
 ): Promise<Card[]> {
   const allCards = await db.cards.where("deckId").equals(deckId).sortBy("order");
   if (allCards.length === 0) return [];
@@ -260,7 +270,88 @@ export async function rateCardFSRS(
 }
 
 /**
- * Calculates deck statistics based on FSRS states for a user
+ * Aggregated "today" workload across the whole library.
+ *
+ * Uses the exact same formula as `calculateDeckFSRSStats` (scheduled due +
+ * capped new cards), so the home screen and the deck badges never disagree.
+ */
+export interface LibraryStats {
+  decksCount: number;
+  cardsCount: number;
+  dueToday: number;
+  newCount: number;
+  learningCount: number;
+  reviewDueCount: number;
+  masteredCount: number;
+}
+
+export async function calculateLibraryStats(userId: string): Promise<LibraryStats> {
+  const [decks, cards, states] = await Promise.all([
+    db.decks.toArray(),
+    db.cards.toArray(),
+    db.fsrs_states.toArray(),
+  ]);
+
+  const userStates = new Map(
+    states.filter((s) => s.userId === userId).map((s) => [s.cardId, s])
+  );
+  const now = Date.now();
+
+  const perDeck = new Map<
+    string,
+    { total: number; newCount: number; learning: number; reviewDue: number; mastered: number }
+  >();
+
+  for (const card of cards) {
+    const bucket =
+      perDeck.get(card.deckId) ??
+      { total: 0, newCount: 0, learning: 0, reviewDue: 0, mastered: 0 };
+    bucket.total++;
+
+    const state = userStates.get(card.id);
+    if (!state || state.state === State.New) {
+      bucket.newCount++;
+    } else if (state.state === State.Learning || state.state === State.Relearning) {
+      bucket.learning++;
+    } else if (state.state === State.Review) {
+      const dueTime = state.due instanceof Date ? state.due.getTime() : Number(state.due);
+      if (dueTime <= now) bucket.reviewDue++;
+      else if (state.stability >= 21) bucket.mastered++;
+    }
+
+    perDeck.set(card.deckId, bucket);
+  }
+
+  let cardsCount = 0;
+  let dueToday = 0;
+  let newCount = 0;
+  let learningCount = 0;
+  let reviewDueCount = 0;
+  let masteredCount = 0;
+
+  for (const bucket of perDeck.values()) {
+    cardsCount += bucket.total;
+    newCount += bucket.newCount;
+    learningCount += bucket.learning;
+    reviewDueCount += bucket.reviewDue;
+    masteredCount += bucket.mastered;
+    dueToday +=
+      bucket.reviewDue + bucket.learning + Math.min(bucket.newCount, NEW_CARD_DAILY_LIMIT);
+  }
+
+  return {
+    decksCount: decks.length,
+    cardsCount,
+    dueToday,
+    newCount,
+    learningCount,
+    reviewDueCount,
+    masteredCount,
+  };
+}
+
+/**
+ * Calculates deck statistics based on FSRS states for a user.
  */
 export async function calculateDeckFSRSStats(deckId: string, userId: string) {
   const cards = await db.cards.where("deckId").equals(deckId).toArray();
@@ -293,7 +384,8 @@ export async function calculateDeckFSRSStats(deckId: string, userId: string) {
 
   const total = cards.length;
   const totalReviewed = total - newCount;
-  const dueTotal = dueReviewCount + learningCount + (newCount > 0 ? Math.min(newCount, 20) : 0);
+  const dueTotal =
+    dueReviewCount + learningCount + (newCount > 0 ? Math.min(newCount, NEW_CARD_DAILY_LIMIT) : 0);
 
   return {
     total,

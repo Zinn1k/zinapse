@@ -20,6 +20,9 @@ git archive -o zinapse-source.zip HEAD
 if (Test-Path "PROJECT_CONTEXT_FOR_AI.md") {
     Compress-Archive -Path "PROJECT_CONTEXT_FOR_AI.md" -Update -DestinationPath "zinapse-source.zip"
 }
+if (Test-Path "DEEPSEEK_HARNESS_SUMMARY.md") {
+    Compress-Archive -Path "DEEPSEEK_HARNESS_SUMMARY.md" -Update -DestinationPath "zinapse-source.zip"
+}
 if (Test-Path ".env.example") {
     Compress-Archive -Path ".env.example" -Update -DestinationPath "zinapse-source.zip"
 }
@@ -30,6 +33,7 @@ Write-Host "✓ zinapse-source.zip created ($([math]::Round($zipSize, 1)) KB)." 
 $knownFileIds = @{
     # Root Files
     "PROJECT_CONTEXT_FOR_AI.md"       = "1Lkq_Vsep_kMCnm0wF0fQ2M8thju6ouTJ"
+    "DEEPSEEK_HARNESS_SUMMARY.md"      = "1P6g4vaMv4SpKuy0C9TV9fkXXns13hQ82"
     "README.md"                        = "1L3iejeuUzB-_6YZiKM6l7sOqMURgnfV0"
     "package.json"                     = "1nFuRBK2u6YlFs3BoVp1-OqUFpjM8_5LR"
     "capacitor.config.ts"              = "1YJc7If9oIT5lRDiSSx1lD2KteBSFN6Pq"

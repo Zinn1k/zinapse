@@ -4,20 +4,29 @@ import * as React from "react";
 import * as ProgressPrimitive from "@radix-ui/react-progress";
 import { cn } from "@/lib/utils";
 
+interface ProgressProps
+  extends React.ComponentPropsWithoutRef<typeof ProgressPrimitive.Root> {
+  /** Optional class for the filled indicator (gradients, colours). */
+  indicatorClassName?: string;
+}
+
 const Progress = React.forwardRef<
   React.ElementRef<typeof ProgressPrimitive.Root>,
-  React.ComponentPropsWithoutRef<typeof ProgressPrimitive.Root>
->(({ className, value, ...props }, ref) => (
+  ProgressProps
+>(({ className, value, indicatorClassName, ...props }, ref) => (
   <ProgressPrimitive.Root
     ref={ref}
     className={cn(
-      "relative h-2 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800",
+      "relative h-2 w-full overflow-hidden rounded-full bg-surface-2",
       className
     )}
     {...props}
   >
     <ProgressPrimitive.Indicator
-      className="h-full w-full flex-1 bg-indigo-600 transition-all dark:bg-indigo-500"
+      className={cn(
+        "h-full w-full flex-1 rounded-full bg-gradient-to-r from-indigo-500 to-violet-500 transition-transform duration-500 ease-out",
+        indicatorClassName
+      )}
       style={{ transform: `translateX(-${100 - (value || 0)}%)` }}
     />
   </ProgressPrimitive.Root>

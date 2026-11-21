@@ -332,13 +332,13 @@ export default function EditDeckPage({
   };
 
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-black text-zinc-900 dark:text-zinc-100 flex flex-col">
+    <div className="app-shell flex min-h-screen flex-col">
       {/* Top Navbar */}
-      <header className="sticky top-0 z-40 border-b border-zinc-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-md">
-        <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
+      <header className="glass sticky top-0 z-40 border-b border-line/80">
+        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4">
           <Link
             href="/"
-            className="flex items-center space-x-1.5 text-xs font-semibold text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition"
+            className="flex items-center gap-1.5 rounded-xl px-2 py-1.5 text-xs font-semibold text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink"
           >
             <ArrowLeft className="w-4 h-4" />
             <span>Назад к колодам</span>
